@@ -2,42 +2,40 @@ param(
     [Parameter(Mandatory = $true)][string]$InCsv1,
     [Parameter(Mandatory = $true)][string]$InCsv2,
     [Parameter()][string]$ResultXlsx,
-    [Parameter(Mandatory = $true)][int]$KeyItem,          # 1始まりのキー項目
+    [Parameter(Mandatory = $true)][int[]]$KeyItem,        # 1始まりのキー項目（複数可）
     [Parameter()][int[]]$TargetColumns = @(),             # 空なら全カラム
-    [Parameter()][string]$Encoding = "utf-8",
-    [Parameter()][string]$Separator = ","
+    [Parameter()][int]$StartRow = 1,                      # 1始まりの行番号
+    [Parameter()][int]$MaxRows = 0,                       # 0は制限なし
+    [Parameter()][string]$Encoding = "Shift_JIS",
+    [Parameter()][string]$Separator = ",",
+    [Parameter()][ValidateSet("exclude", "include")]
+    [string]$Mode = "include"
 )
 
-# $PSScriptRoot\Common 内の共通関数をロード
+# 共通関数ロード
 Get-ChildItem -Path "$PSScriptRoot\Common" -Recurse -Filter *.ps1 | ForEach-Object {
     . $_.FullName
 }
 
-# ===== 入力ファイル存在チェック =====
-if (-not (Test-Path $InCsv1)) {
-    Write-Error "ファイルが見つかりません: $InCsv1"
-    exit 1
-}
-if (-not (Test-Path $InCsv2)) {
-    Write-Error "ファイルが見つかりません: $InCsv2"
-    exit 1
-}
+# 入力チェック
+if (-not (Test-Path $InCsv1)) { Write-Error "ファイルが見つかりません: $InCsv1"; exit 1 }
+if (-not (Test-Path $InCsv2)) { Write-Error "ファイルが見つかりません: $InCsv2"; exit 1 }
 
-# ===== 出力ファイル名の決定 =====
+# 出力先
 if (-not $ResultXlsx) {
     $base = [System.IO.Path]::GetFileNameWithoutExtension($InCsv1)
     $dir  = [System.IO.Path]::GetDirectoryName((Resolve-Path $InCsv1))
     $ResultXlsx = Join-Path $dir ($base + "_result.xlsx")
 }
 
-# ===== EPPlus.dll 読み込み =====
+# EPPlus.dll
 $epplusPath = ".\Modules\ImportExcel\7.8.10\EPPlus.dll"
 if (-not (Import-EpplusAssembly -DllPath $epplusPath)) {
     Write-Error "EPPlus.dllが見つかりません: $epplusPath"
     exit 1
 }
 
-# ===== CSV 読み込み =====
+# --- CSV 読み込み関数（イテレータ） ---
 function Read-CsvLines {
     param(
         [string]$Path,
@@ -50,76 +48,103 @@ function Read-CsvLines {
     if ($null -eq $reader) {
         throw "Stream Readerの作成に失敗しました: $Path"
     }
-
     $splitter = [CsvSplitter]::new($Separator)
-    $rows = @()
-    while (-not $reader.EndOfStream) {
-        $line = $reader.ReadLine()
-        if ([string]::IsNullOrWhiteSpace($line)) {
-            continue  # 空行やnullはスキップ
-        }
-        $rows += ,($splitter.SplitAndClean($line))
-    }
 
-    $reader.Close()
-    return ,$rows
+    try {
+        while (-not $reader.EndOfStream) {
+            $line = $reader.ReadLine()
+            if ([string]::IsNullOrWhiteSpace($line)) { continue }
+            ,($splitter.SplitAndClean($line))
+        }
+    }
+    finally { $reader.Close() }
 }
 
-$csv1 = Read-CsvLines -Path $InCsv1 -Encoding $Encoding -Separator $Separator
-$csv2 = Read-CsvLines -Path $InCsv2 -Encoding $Encoding -Separator $Separator
+# --- イテレータ作成 ---
+$enum1 = Read-CsvLines -Path $InCsv1 -Encoding $Encoding -Separator $Separator
+$enum2 = Read-CsvLines -Path $InCsv2 -Encoding $Encoding -Separator $Separator
 
-# ===== Excel 出力準備 =====
+# --- 行数チェック ---
+$csv1Lines = @($enum1)
+$csv2Lines = @($enum2)
+
+if ($csv2Lines.Count -gt $csv1Lines.Count) {
+    Write-Warning "CSV2の行数がCSV1より多いため、比較処理をスキップします。"
+    Write-Warning "CSV1: $($csv1Lines.Count) 行, CSV2: $($csv2Lines.Count) 行"
+    return
+}
+
+# イテレータを再生成（前の @() 展開で消費されたため）
+$enum1Enumerator = $csv1Lines.GetEnumerator()
+$enum2Enumerator = $csv2Lines.GetEnumerator()
+
+
+# --- Excel 出力 ---
 $package = New-Object OfficeOpenXml.ExcelPackage
 $sheet   = $package.Workbook.Worksheets.Add("Compare")
 
-# 最大列数を算出
-$maxCols = [Math]::Max(
-    ($csv1 | ForEach-Object { $_.Count } | Measure-Object -Maximum).Maximum,
-    ($csv2 | ForEach-Object { $_.Count } | Measure-Object -Maximum).Maximum
-)
-
-# 対象列
-$targetIndexes = if ($TargetColumns.Count -gt 0) {
-    $TargetColumns | ForEach-Object { $_ - 1 }
-} else {
-    0..($maxCols-1)
+# 最大列数の計算（両CSVの先頭数行を見て決定）
+$maxCols = 0
+foreach ($row in ($enum1 + $enum2 | Select-Object -First 100)) {
+    if ($row.Count -gt $maxCols) { $maxCols = $row.Count }
 }
 
-# ===== ヘッダー行 =====
-$sheet.Cells.Item(1,1).Value = "行番号"
-$sheet.Cells.Item(1,2).Value = "キー項目"
-
-$colIndex = 3
-foreach ($i in $targetIndexes) {
-    $sheet.Cells.Item(1,$colIndex).Value = "列$($i+1)"
-    $colIndex++
+# 比較対象カラムの決定
+if ($TargetColumns.Count -eq 0) {
+    $TargetColumns = 1..$maxCols
+} elseif ($Mode -eq "exclude") {
+    $TargetColumns = (1..$maxCols) | Where-Object { $TargetColumns -notcontains $_ }
 }
 
-# ===== 比較処理 =====
-$maxRows = [Math]::Max($csv1.Count, $csv2.Count)
+# --- ヘッダー行 ---
+$colIndex = 1
+$sheet.Cells.Item(1,$colIndex++).Value = "行番号"
+
+$ki = 1
+foreach ($idx in $KeyItem) {
+    $sheet.Cells.Item(1,$colIndex++).Value = "キー項目$ki"
+    $ki++
+}
+
+foreach ($i in $TargetColumns) {
+    $sheet.Cells.Item(1,$colIndex++).Value = "列$($i)"
+}
+
+# --- 比較処理 ---
 $rowIndex = 2
+$rowNumber = 0
 
-for ($r = 0; $r -lt $maxRows; $r++) {
-    $row1 = if ($r -lt $csv1.Count) { $csv1[$r] } else { @() }
-    $row2 = if ($r -lt $csv2.Count) { $csv2[$r] } else { @() }
+$enum1Enumerator = $enum1.GetEnumerator()
+$enum2Enumerator = $enum2.GetEnumerator()
 
-    # 行番号
-    $sheet.Cells.Item($rowIndex,1).Value = $r + 1
-    # キー項目（行1始まり、列は$KeyItem）
-    $sheet.Cells.Item($rowIndex,2).Value = if ($KeyItem -le $row1.Count) { $row1[$KeyItem-1] }
+while ($enum1Enumerator.MoveNext()) {
+    $rowNumber++
+    if ($rowNumber -lt $StartRow) { continue }
+    if ($MaxRows -gt 0 -and ($rowNumber - $StartRow + 1) -gt $MaxRows) { break }
 
-    # 対象列比較
-    $colIndex = 3
-    foreach ($i in $targetIndexes) {
-        $val1 = if ($i -lt $row1.Count) { $row1[$i] } else { $null }
-        $val2 = if ($i -lt $row2.Count) { $row2[$i] } else { $null }
-        $sheet.Cells.Item($rowIndex,$colIndex).Value = if ($val1 -eq $val2) { "〇" } else { "×" }
-        $colIndex++
+    $row1 = $enum1Enumerator.Current
+    $row2 = if ($enum2Enumerator.MoveNext()) { $enum2Enumerator.Current } else { @() }
+
+    $colIndex = 1
+    $sheet.Cells.Item($rowIndex,$colIndex++).Value = $rowNumber
+
+    # --- キー項目出力（CSV1の値をそのまま） ---
+    foreach ($idx in $KeyItem) {
+        $val = if ($idx -le $row1.Count) { $row1[$idx-1] } else { $null }
+        $sheet.Cells.Item($rowIndex,$colIndex++).Value = $val
     }
+
+    # --- 比較処理 ---
+    foreach ($i in $TargetColumns) {
+        $val1 = if ($i -le $row1.Count) { $row1[$i-1] } else { $null }
+        $val2 = if ($i -le $row2.Count) { $row2[$i-1] } else { $null }
+        $sheet.Cells.Item($rowIndex,$colIndex++).Value = if ($val1 -eq $val2) { "〇" } else { "×" }
+    }
+
     $rowIndex++
 }
 
-# ===== 保存 =====
+# 保存
 $sheet.Cells.AutoFitColumns()
 try {
     $package.SaveAs([System.IO.FileInfo]::new($ResultXlsx))

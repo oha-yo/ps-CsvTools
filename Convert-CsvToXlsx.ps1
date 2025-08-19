@@ -1,132 +1,122 @@
 param(
-    [Parameter(Mandatory = $true)][string]$InputFile,
-    [Parameter()][string]$Encoding = "Shift_JIS",
-    [Parameter()][int]$StartRow = 2,
-    [Parameter()][int]$MaxRows = 0,
+    [Parameter(Mandatory = $true)][string]$InCsv1,
+    [Parameter(Mandatory = $true)][string]$InCsv2,
+    [Parameter()][string]$ResultXlsx,
+    [Parameter(Mandatory = $true)][int]$KeyItem,          # 1始まりのキー項目
+    [Parameter()][int[]]$TargetColumns = @(),             # 空なら全カラム
+    [Parameter()][string]$Encoding = "utf-8",
     [Parameter()][string]$Separator = ",",
-    [Parameter()][bool]$AddColumnNumbers = $false,
-    [Parameter()][int[]]$TargetColumns = @()  # 空なら全カラム
+    [Parameter()][int]$StartRow = 2,                      # スキップする先頭行
+    [Parameter()][int]$MaxRows = 0                        # 0なら制限なし
 )
 
-# $PSScriptRoot\Common フォルダ以下のすべての.ps1ファイルを再帰的に取得し、
-# それぞれのファイルをドットソーシング（現在のスコープで読み込み）することで、
-# 関数やクラスをモジュール内に定義・利用可能にする
-Get-ChildItem -Path "$PSScriptRoot\Common" -Recurse -Filter *.ps1 | ForEach-Object {
-    . $_.FullName
+# 共通関数ロード
+Get-ChildItem -Path "$PSScriptRoot\Common" -Recurse -Filter *.ps1 | ForEach-Object { . $_.FullName }
+
+# 入力ファイル存在チェック
+foreach ($file in @($InCsv1,$InCsv2)) {
+    if (-not (Test-Path $file)) {
+        Write-Error "ファイルが見つかりません: $file"
+        exit 1
+    }
 }
 
-# 実行パラメータを履歴ファイルへ保存
-Write-ExecutionHistory
+# 出力ファイル名決定
+if (-not $ResultXlsx) {
+    $base = [System.IO.Path]::GetFileNameWithoutExtension($InCsv1)
+    $dir  = [System.IO.Path]::GetDirectoryName((Resolve-Path $InCsv1))
+    $ResultXlsx = Join-Path $dir ($base + "_result.xlsx")
+}
 
-# EPPlus.dll の読み込み（ImportExcelモジュールから直接）
+# EPPlus.dll 読み込み
 $epplusPath = ".\Modules\ImportExcel\7.8.10\EPPlus.dll"
 if (-not (Import-EpplusAssembly -DllPath $epplusPath)) {
     Write-Error "EPPlus.dllが見つかりません: $epplusPath"
     exit 1
 }
-# インプットファイル存在チェック
-if (-not (Test-Path -Path $InputFile -PathType Leaf)) {
-    Write-Error "ファイルが見つかりません: $InputFile"
-    exit 1
-}
-Write-Debug "InputFile     : $InputFile"
 
-# 出力ファイル(FULL PATH)作成
-$OutputFile = [System.IO.Path]::ChangeExtension($InputFile, "xlsx")
-Write-Debug "OutputFile    : $OutputFile"
+# ===== 行単位で読み込み可能なEnumeratorを作成 =====
+function Get-CsvEnumerator {
+    param(
+        [string]$Path,
+        [string]$Encoding,
+        [string]$Separator,
+        [int]$StartRow
+    )
 
-#エンコード名の正規化(曖昧な入力エンコードをPowershellの正規なエンコード名に変換)
-$Encoding = Convert-EncodingName -enc $Encoding
-Write-Debug "Encoding      :$Encoding"
+    $enc = Convert-EncodingName -enc $Encoding
+    $readerEncoding = Get-ReaderEncoding -Encoding $enc
+    $reader = Get-StreamReader -FilePath $Path -Encoding $readerEncoding
+    if ($null -eq $reader) { throw "Stream Readerの作成に失敗: $Path" }
 
-# Stream Reader用エンコード取得
-$readerencoding = Get-ReaderEncoding -Encoding $Encoding
-Write-Debug "readerencoding:$readerencoding"
+    $splitter = [CsvSplitter]::new($Separator)
 
-# Stream Readerの取得
-$reader = Get-StreamReader -FilePath $InputFile -Encoding $readerencoding
-if ($null -eq $reader) {
-    Write-Error "Stream Readerの作成に失敗しました。処理を中断します。"
-    exit 1
-}
+    # StartRowまでスキップ
+    for ($i = 1; $i -lt $StartRow; $i++) {
+        if (-not $reader.EndOfStream) { $reader.ReadLine() | Out-Null }
+    }
 
-# 指定行までスキップ
-$currentLineNumber = 0
-while (-not $reader.EndOfStream -and $currentLineNumber -lt ($StartRow - 1)) {
-    $reader.ReadLine() | Out-Null
-    $currentLineNumber++
-}
-
-Write-Debug "Separator: $Separator"
-$splitter = [CsvSplitter]::new($Separator)
-
-# 最初のデータ行を読み取り、列数を判定
-$firstDataLine = $reader.ReadLine()
-$allColumns = $splitter.Split($firstDataLine)
-
-# 対象カラム（0始まりに変換）
-$targetIndexes = if ($TargetColumns.Count -gt 0) {
-    $TargetColumns | ForEach-Object { $_ - 1 }
-} else {
-    # 全てのカラムを対象
-    0..($allColumns.Count - 1)
-}
-
-# 処理対象カラムのカラム数をカウント
-$columnCount = $targetIndexes.Count
-# 通番でヘッダー作成
-$headers = @(1..$columnCount | ForEach-Object { "$_" })
-
-# データ行を List[string] で読み込み（1行目含む）
-$linesToProcess = [System.Collections.Generic.List[string]]::new()
-$linesToProcess.Add($firstDataLine)
-
-$maxToRead = if ($MaxRows -gt 0) { $MaxRows - 1 } else { [int]::MaxValue }
-while (-not $reader.EndOfStream -and $linesToProcess.Count -lt $maxToRead + 1) {
-    $linesToProcess.Add($reader.ReadLine())
-    if ($linesToProcess.Count % 50000 -eq 0) {
-        Write-Debug "読み込み中: $($linesToProcess.Count) 行..."
+    return [PSCustomObject]@{
+        Reader   = $reader
+        Splitter = $splitter
     }
 }
-$reader.Close()
-Write-Debug "InputFile読み込み完了: $($linesToProcess.Count) 行"
 
-# Excelファイル作成
+# Enumeratorを取得
+$csv1Enum = Get-CsvEnumerator -Path $InCsv1 -Encoding $Encoding -Separator $Separator -StartRow $StartRow
+$csv2Enum = Get-CsvEnumerator -Path $InCsv2 -Encoding $Encoding -Separator $Separator -StartRow $StartRow
+
+# Excel準備
 $package = New-Object OfficeOpenXml.ExcelPackage
-$sheet = $package.Workbook.Worksheets.Add("Sheet1")
+$sheet = $package.Workbook.Worksheets.Add("Compare")
 
-# ヘッダー出力（1行目に列通番をつける）
-if ($AddColumnNumbers) {
-    for ($j = 0; $j -lt $headers.Length; $j++) {
-        $sheet.Cells.Item(1, $j + 1).Value = $headers[$j]
-    }
+# 最大列数算出（最初の行のみで判定）
+$firstRow1 = if (-not $csv1Enum.Reader.EndOfStream) { $csv1Enum.Splitter.SplitAndClean($csv1Enum.Reader.ReadLine()) } else { @() }
+$firstRow2 = if (-not $csv2Enum.Reader.EndOfStream) { $csv2Enum.Splitter.SplitAndClean($csv2Enum.Reader.ReadLine()) } else { @() }
+
+# 対象列決定
+function Get-TargetIndexes { param($firstRow, $TargetColumns) 
+    if ($TargetColumns.Count -gt 0) { return $TargetColumns | ForEach-Object { $_ - 1 } } 
+    else { return 0..($firstRow.Count - 1) } 
 }
+$targetIndexes = Get-TargetIndexes -firstRow $firstRow1 -TargetColumns $TargetColumns
 
-# データ出力（ヘッダーの有無を考慮）
-$rowIndex = if ($AddColumnNumbers) { 2 } else { 1 }
-# インプットファイルをメモリに読み上げた後１行づつエクセルへ書き込む
-foreach ($line in $linesToProcess) {
-    $columns = $splitter.SplitAndClean($line)
-    for ($i = 0; $i -lt $targetIndexes.Count; $i++) {
-        $srcIndex = $targetIndexes[$i]
-        $value = if ($srcIndex -lt $columns.Count) { $columns[$srcIndex] } else { $null }
-        $sheet.Cells.Item($rowIndex, $i + 1).Value = $value
+# Excelヘッダー
+$sheet.Cells.Item(1,1).Value = "行番号"
+$sheet.Cells.Item(1,2).Value = "キー項目"
+$colIndex = 3
+foreach ($i in $targetIndexes) { $sheet.Cells.Item(1,$colIndex).Value = "列$($i+1)"; $colIndex++ }
+
+# ===== 行単位比較 =====
+$rowIndex = 2
+$linesProcessed = 0
+while ((-not $csv1Enum.Reader.EndOfStream -or -not $csv2Enum.Reader.EndOfStream) -and ($MaxRows -eq 0 -or $linesProcessed -lt $MaxRows)) {
+    $line1 = if (-not $csv1Enum.Reader.EndOfStream) { $csv1Enum.Reader.ReadLine() } else { $null }
+    $line2 = if (-not $csv2Enum.Reader.EndOfStream) { $csv2Enum.Reader.ReadLine() } else { $null }
+
+    $row1 = if ($line1) { $csv1Enum.Splitter.SplitAndClean($line1) } else { @() }
+    $row2 = if ($line2) { $csv2Enum.Splitter.SplitAndClean($line2) } else { @() }
+
+    $sheet.Cells.Item($rowIndex,1).Value = $rowIndex - 1
+    $sheet.Cells.Item($rowIndex,2).Value = if ($KeyItem -le $row1.Count) { $row1[$KeyItem-1] }
+
+    $colIndex = 3
+    foreach ($i in $targetIndexes) {
+        $val1 = if ($i -lt $row1.Count) { $row1[$i] } else { $null }
+        $val2 = if ($i -lt $row2.Count) { $row2[$i] } else { $null }
+        $sheet.Cells.Item($rowIndex,$colIndex).Value = if ($val1 -eq $val2) { "〇" } else { "×" }
+        $colIndex++
     }
+
     $rowIndex++
-    if ($rowIndex % 50000 -eq 0) {
-        Write-Debug "書き出し中: $rowIndex 行目..."
-    }
+    $linesProcessed++
 }
 
-Write-Debug "書き出し完了: $($rowIndex -1)行"
-# オートフィット・保存
-Write-Debug "ファイル保存中..."
+# クローズ
+$csv1Enum.Reader.Close()
+$csv2Enum.Reader.Close()
+
+# 保存
 $sheet.Cells.AutoFitColumns()
-try {
-    $package.SaveAs([System.IO.FileInfo]::new($OutputFile))
-    Write-Debug "Excelファイル出力完了: $OutputFile"
-} catch {
-    Write-Error "ファイル保存時にエラーが発生しました: $($_.Exception.Message)"
-    Write-Error "出力ファイルが既に開かれている可能性があります。閉じて再実行してください。"
-    exit 1
-}
+try { $package.SaveAs([System.IO.FileInfo]::new($ResultXlsx)); Write-Host "比較結果を出力しました: $ResultXlsx" }
+catch { Write-Error "保存時にエラー: $($_.Exception.Message)"; exit 1 }
