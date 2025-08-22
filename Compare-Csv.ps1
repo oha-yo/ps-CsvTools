@@ -35,7 +35,7 @@ if (-not (Import-EpplusAssembly -DllPath $epplusPath)) {
     exit 1
 }
 
-# CSV読み込み関数
+# CSV読み込み関数（遅延評価）
 function Read-CsvLines {
     param(
         [string]$Path,
@@ -45,44 +45,19 @@ function Read-CsvLines {
     $enc = Convert-EncodingName -enc $Encoding
     $readerencoding = Get-ReaderEncoding -Encoding $enc
     $reader = Get-StreamReader -FilePath $Path -Encoding $readerencoding
-    if ($null -eq $reader) {
-        throw "Stream Readerの作成に失敗しました: $Path"
-    }
     $splitter = [CsvSplitter]::new($Separator)
 
     try {
         while (-not $reader.EndOfStream) {
             $line = $reader.ReadLine()
             if ([string]::IsNullOrWhiteSpace($line)) { continue }
-            ,($splitter.SplitAndClean($line))
+
+            $row = $splitter.SplitAndClean($line)
+            Write-Output (, $row)  # ← これが正しい構文
         }
     }
-    finally { $reader.Close() }
-}
-
-# CSV読み込み
-$csv1Lines = @((Read-CsvLines -Path $InCsv1 -Encoding $Encoding -Separator $Separator))
-$csv2Lines = @((Read-CsvLines -Path $InCsv2 -Encoding $Encoding -Separator $Separator))
-
-if ($csv2Lines.Count -gt $csv1Lines.Count) {
-    Write-Warning "CSV2の行数がCSV1より多いため、比較処理をスキップします。"
-    Write-Warning "CSV1: $($csv1Lines.Count) 行, CSV2: $($csv2Lines.Count) 行"
-    return
-}
-
-# イテレータ作成
-$enum1Enumerator = $csv1Lines.GetEnumerator()
-$enum2Enumerator = $csv2Lines.GetEnumerator()
-
-# StartRow分スキップ
-for ($i = 1; $i -lt $StartRow; $i++) {
-    if (-not $enum1Enumerator.MoveNext()) {
-        Write-Warning "CSV1の行数が StartRow ($StartRow) に満たないため、比較できません。"
-        return
-    }
-    if (-not $enum2Enumerator.MoveNext()) {
-        Write-Warning "CSV2の行数が StartRow ($StartRow) に満たないため、比較できません。"
-        return
+    finally {
+        $reader.Close()
     }
 }
 
@@ -90,21 +65,26 @@ for ($i = 1; $i -lt $StartRow; $i++) {
 $package = New-Object OfficeOpenXml.ExcelPackage
 $sheet   = $package.Workbook.Worksheets.Add("Compare")
 
-# 最大列数の決定
-$maxCols = ($csv1Lines + $csv2Lines | Select-Object -First 100 | ForEach-Object { $_.Count }) | Measure-Object -Maximum | Select-Object -ExpandProperty Maximum
+# 最大列数の推定（先頭数行のみ）
+$peek1 = @(Read-CsvLines -Path $InCsv1 -Encoding $Encoding -Separator $Separator | Select-Object -First 50)
+$peek2 = @(Read-CsvLines -Path $InCsv2 -Encoding $Encoding -Separator $Separator | Select-Object -First 50)
+$maxCols = ($peek1 + $peek2 | ForEach-Object { $_.Count }) | Measure-Object -Maximum | Select-Object -ExpandProperty Maximum
 
 # 比較対象カラムの決定
 if ($TargetColumns.Count -eq 0) {
     $TargetColumns = 1..$maxCols
-} elseif ($Mode -eq "exclude") {
-    $TargetColumns = (1..$maxCols) | Where-Object { $TargetColumns -notcontains $_ }
+}
+if ($Mode -eq "exclude") {
+    $TargetColumns = (1..$maxCols) | Where-Object {
+        ($TargetColumns -notcontains $_) -and ($KeyItem -notcontains $_)
+    }
 }
 
 # ヘッダー行
 $colIndex = 1
 $sheet.Cells.Item(1,$colIndex++).Value = "行番号"
 
-if ($KeyItem) {
+if ($KeyItem -and $KeyItem.Count -gt 0) {
     $ki = 1
     foreach ($idx in $KeyItem) {
         $sheet.Cells.Item(1,$colIndex++).Value = "キー項目$ki"
@@ -112,29 +92,46 @@ if ($KeyItem) {
     }
 }
 
-foreach ($i in $TargetColumns) {
-    $sheet.Cells.Item(1,$colIndex++).Value = "列$($i)"
+# 出力列名は TargetColumns の順番に「列1」「列2」…と振り直す
+for ($i = 1; $i -le $TargetColumns.Count; $i++) {
+    $sheet.Cells.Item(1,$colIndex++).Value = "列$i"
 }
+
+# イテレータ（遅延評価）
+$enum1Enumerator = @(Read-CsvLines -Path $InCsv1 -Encoding $Encoding -Separator $Separator).GetEnumerator()
+$enum2Enumerator = @(Read-CsvLines -Path $InCsv2 -Encoding $Encoding -Separator $Separator).GetEnumerator()
+
 
 # 比較処理
 $rowIndex = 2
-$rowNumber = $StartRow - 1
+$rowNumber = 0
 $processedCount = 0
 
 while ($enum1Enumerator.MoveNext()) {
+    if (-not $enum2Enumerator.MoveNext()) { break }
+
+    $row1 = $enum1Enumerator.Current
+    $row2 = $enum2Enumerator.Current
+
     $rowNumber++
+    if ($rowNumber -lt $StartRow) { continue }
+
     $processedCount++
     if ($MaxRows -gt 0 -and $processedCount -gt $MaxRows) { break }
 
-    $row1 = $enum1Enumerator.Current
-    $row2 = if ($enum2Enumerator.MoveNext()) { $enum2Enumerator.Current } else { @() }
+    if ($row1 -isnot [System.Collections.IList] -or $row2 -isnot [System.Collections.IList]) {
+        Write-Warning "[$rowNumber] 行データが配列ではありません。スキップします。"
+        continue
+    }
 
     $colIndex = 1
     $sheet.Cells.Item($rowIndex,$colIndex++).Value = $rowNumber
 
-    foreach ($idx in $KeyItem) {
-        $val = if ($idx -le $row1.Count) { $row1[$idx-1] } else { $null }
-        $sheet.Cells.Item($rowIndex,$colIndex++).Value = $val
+    if ($KeyItem -and $KeyItem.Count -gt 0) {
+        foreach ($idx in $KeyItem) {
+            $val = if ($idx -le $row1.Count) { $row1[$idx-1] } else { $null }
+            $sheet.Cells.Item($rowIndex,$colIndex++).Value = $val
+        }
     }
 
     foreach ($i in $TargetColumns) {
