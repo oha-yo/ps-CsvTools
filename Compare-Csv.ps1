@@ -116,11 +116,15 @@ $rowNumber = 0
 
 $enum1Enumerator = $enum1.GetEnumerator()
 $enum2Enumerator = $enum2.GetEnumerator()
-
 while ($enum1Enumerator.MoveNext()) {
     $rowNumber++
     if ($rowNumber -lt $StartRow) { continue }
     if ($MaxRows -gt 0 -and ($rowNumber - $StartRow + 1) -gt $MaxRows) { break }
+
+    # 1000行ごとに進捗表示
+    if (($rowNumber - $StartRow + 1) % 1000 -eq 0) {
+        Write-Host "$($rowNumber - $StartRow + 1) 行目まで処理しました..."
+    }
 
     $row1 = $enum1Enumerator.Current
     $row2 = if ($enum2Enumerator.MoveNext()) { $enum2Enumerator.Current } else { @() }
@@ -133,7 +137,6 @@ while ($enum1Enumerator.MoveNext()) {
         $val = if ($idx -le $row1.Count) { $row1[$idx-1] } else { $null }
         $sheet.Cells.Item($rowIndex,$colIndex++).Value = $val
     }
-
     # --- 比較処理 ---
     foreach ($i in $TargetColumns) {
         $val1 = if ($i -le $row1.Count) { $row1[$i-1] } else { $null }
