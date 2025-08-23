@@ -11,7 +11,12 @@ param(
     [Parameter()][ValidateSet("exclude", "include")]
     [string]$Mode = "include"
 )
-
+# 区切り文字の正規化
+# Powershellでは「タブ」を `t で表記するため
+switch ($Separator) {
+    '\t' { $Separator = "`t" }
+    '\\t' { $Separator = "`t" }
+}
 # 共通関数ロード
 Get-ChildItem -Path "$PSScriptRoot\Common" -Recurse -Filter *.ps1 | ForEach-Object {
     . $_.FullName
@@ -34,6 +39,9 @@ if (-not (Import-EpplusAssembly -DllPath $epplusPath)) {
     Write-Error "EPPlus.dllが見つかりません: $epplusPath"
     exit 1
 }
+
+# 実行パラメータを履歴ファイルへ保存
+Write-ExecutionHistory
 
 # CSV読み込み関数（遅延評価）
 function Read-CsvLines {

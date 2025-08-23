@@ -12,7 +12,7 @@ CSVファイルの比較・変換・フィルタリングを効率的に行うPo
 |------------|------|--------|
 | `Compare-Csv.ps1` | 2つのCSVを比較し、差分をExcelで出力 | [Compare-Csv README](./Compare-Csv.md) |
 | `Convert-CsvToXlsx.ps1` | CSVをExcel形式に変換 | [Convert-CsvToXlsx README](./Convert-CsvToXlsx.md) |
-| `exclude_item_csv.ps1` | 指定項目を除外したCSVを生成 | [exclude_item_csv README](./exclude_item_csv.md) |
+| `Filter-CsvColumns.ps1` | 指定項目を除外したCSVを生成 | [Filter-CsvColumns README](./Filter-CsvColumns.md) |
 
 ---
 

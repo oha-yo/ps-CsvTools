@@ -1,12 +1,19 @@
 param(
     [Parameter(Mandatory = $true)][string]$InputFile,
     [Parameter()][string]$Encoding = "Shift_JIS",
-    [Parameter()][int]$StartRow = 2,
+    [Parameter()][int]$StartRow = 1,
     [Parameter()][int]$MaxRows = 0,
     [Parameter()][string]$Separator = ",",
     [Parameter()][bool]$AddColumnNumbers = $false,
     [Parameter()][int[]]$TargetColumns = @()  # 空なら全カラム
 )
+
+# 区切り文字の正規化
+# Powershellでは「タブ」を `t で表記するため
+switch ($Separator) {
+    '\t' { $Separator = "`t" }
+    '\\t' { $Separator = "`t" }
+}
 
 # $PSScriptRoot\Common フォルダ以下のすべての.ps1ファイルを再帰的に取得し、
 # それぞれのファイルをドットソーシング（現在のスコープで読み込み）することで、
@@ -72,8 +79,6 @@ $targetIndexes = if ($TargetColumns.Count -gt 0) {
     0..($allColumns.Count - 1)
 }
 
-# 処理対象カラムのカラム数をカウント
-$columnCount = $targetIndexes.Count
 # 通番でヘッダー作成
 #$headers = @(1..$columnCount | ForEach-Object { "$_" })
 $headers = if ($TargetColumns.Count -gt 0) {
@@ -81,9 +86,6 @@ $headers = if ($TargetColumns.Count -gt 0) {
 } else {
     1..($allColumns.Count) | ForEach-Object { "$_" }
 }
-
-
-
 
 # データ行を List[string] で読み込み（1行目含む）
 $linesToProcess = [System.Collections.Generic.List[string]]::new()

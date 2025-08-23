@@ -6,7 +6,7 @@ param(
     [Parameter()][string]$Encoding = "Shift_JIS",
     [Parameter()][int[]]$TargetColumns = @(),
     [Parameter()][ValidateSet("exclude", "include")]
-    [string]$Mode = "exclude"
+    [string]$Mode = "include"
 )
 
 # 区切り文字の正規化
@@ -20,62 +20,6 @@ switch ($Separator) {
 # 関数やクラスをモジュール内に定義・利用可能にする
 Get-ChildItem -Path "$PSScriptRoot\Common" -Recurse -Filter *.ps1 | ForEach-Object {
     . $_.FullName
-}
-
-function Get-StreamReader {
-    # 補足 UTF8の場合readerはBOMの有無に関係なく求める事ができる
-    param(
-        [string]$FilePath,
-        [System.Text.Encoding]$Encoding
-    )
-    
-    try {
-        return [System.IO.StreamReader]::new($FilePath, $Encoding)
-    }
-    catch [System.IO.FileNotFoundException] {
-        Write-Error "[$($MyInvocation.MyCommand.Name)] ファイルが見つかりません: $FilePath"
-        return $null
-    }
-    catch [System.UnauthorizedAccessException] {
-        Write-Error "[$($MyInvocation.MyCommand.Name)]ファイルにアクセスできません。権限を確認してください。"
-        return $null
-    }
-    catch {
-        Write-Error "[$($MyInvocation.MyCommand.Name)]その他のエラー: $_.Exception.Message"
-        return $null
-    }
-}
-
-
-# Stream Writerを取得
-function Get-StreamWriter {
-    param(
-        [string]$OutputFileName,
-        [System.Text.Encoding]$Encoding,
-        [string]$NewLineChar = "`n"
-    )
-
-    try {
-        $writer = [System.IO.StreamWriter]::new($OutputFileName, $false, $Encoding)
-        $writer.NewLine = $NewLineChar
-        return $writer
-    }
-    catch [System.UnauthorizedAccessException] {
-        Write-Error "[$($MyInvocation.MyCommand.Name)]ファイルにアクセスできません。権限を確認してください: $OutputFileName"
-        return $null
-    }
-    catch [System.IO.DirectoryNotFoundException] {
-        Write-Error "[$($MyInvocation.MyCommand.Name)]ディレクトリが見つかりません: $OutputFileName"
-        return $null
-    }
-    catch [System.IO.IOException] {
-        Write-Error "[$($MyInvocation.MyCommand.Name)]ファイルにアクセスできません（IOエラー）: $OutputFileName"
-        return $null
-    }
-    catch {
-        Write-Error "[$($MyInvocation.MyCommand.Name)]その他のエラーが発生しました: $_"
-        return $null
-    }
 }
 
 # インプットファイル存在チェック
@@ -108,7 +52,26 @@ Write-Debug "Encoding      :$Encoding"
 
 # Stream Reader用エンコード取得
 $readerencoding = Get-ReaderEncoding -Encoding $Encoding
-Write-Debug "readerencoding:$readerencoding"
+$columnCount = Get-CsvColumnCount -FilePath $InputFile `
+    -Encoding $readerencoding `
+    -Separator $Separator `
+    -StartRow $StartRow
+
+Write-Debug "対象行のカラム数: $columnCount"
+# カラム数チェック
+if ($columnCount -lt 1) {
+    Write-Error "対象カラムが見つかりません: $columnCount"
+    exit 1
+}
+
+# 対象カラム（0始まりに変換）
+$targetIndexes = if ($TargetColumns.Count -gt 0) {
+    $TargetColumns | ForEach-Object { $_ - 1 }
+} else {
+    # 全てのカラムを対象
+    0..($columnCount - 1)
+}
+Write-Debug "targetIndexes:$targetIndexes"
 
 # Stream Readerの取得
 $reader = Get-StreamReader -FilePath $InputFile -Encoding $readerencoding
@@ -116,7 +79,6 @@ if ($null -eq $reader) {
     Write-Error "Stream Readerの作成に失敗しました。処理を中断します。"
     exit 1
 }
-
 # Stream Writer用エンコーディングの取得
 # インプットファイルのエンコーディングに合わせる
 $writerEncoding = Get-WriterEncoding -Encoding $Encoding -HasBOM $hasBOM
@@ -131,15 +93,6 @@ if ($null -eq $writer) {
 
 # 実行パラメータを履歴ファイルへ保存
 Write-ExecutionHistory
-
-# 対象カラム（0始まりに変換）
-$targetIndexes = if ($TargetColumns.Count -gt 0) {
-    $TargetColumns | ForEach-Object { $_ - 1 }
-} else {
-    # 全てのカラムを対象
-    0..($allColumns.Count - 1)
-}
-Write-Debug "targetIndexes:$targetIndexes"
 
 # 行処理開始
 $currentLineNumber = 0
@@ -169,8 +122,8 @@ while (-not $reader.EndOfStream) {
             }
         }
     )
-    Write-Debug "columns:$columns"
-    Write-Debug "filtered:$filtered"
+    #Write-Debug "columns:$columns"
+    #Write-Debug "filtered:$filtered"
 
     # 対象カラム配列にセパレータを合わせて文字列化
     #Write-Debug "filtered:$filtered"
