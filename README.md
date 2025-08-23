@@ -15,6 +15,16 @@ CSVファイルの比較・変換・フィルタリングを効率的に行うPo
 | `Filter-CsvColumns.ps1` | 指定項目を除外したCSVを生成 | [Filter-CsvColumns README](./Filter-CsvColumns.md) |
 
 ---
+## 必須要件
+
+- PowerShell 7.x
+- [EPPlus.dll](https://www.nuget.org/packages/EPPlus)  
+  ※本スクリプトでは ImportExcel モジュールに同梱された DLL を使用しますので以下手順で取得してください。
+### ダウンロード方法
+```bash
+makedir .\Modules
+Save-Module -Name ImportExcel -Path .\Modules
+```
 
 ## 📁 ディレクトリ構成
 
