@@ -22,7 +22,7 @@ CSVファイルの比較・変換・フィルタリングを効率的に行うPo
   ※本スクリプトでは ImportExcel モジュールに同梱された DLL を使用しますので以下手順で取得してください。
 ### ダウンロード方法
 ```bash
-makedir .\Modules
+mkdir .\Modules
 Save-Module -Name ImportExcel -Path .\Modules
 ```
 
