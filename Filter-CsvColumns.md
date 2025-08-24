@@ -1,11 +1,12 @@
-## 📄 Filter-CsvColumns.md
+# 🔍 Filter-CsvColumns.md
 
 PowerShellスクリプトによる高速・柔軟なCSVカラム抽出ツール。  
 指定したカラムのみを抽出する「include」モードと、指定したカラムを除外する「exclude」モードをサポート。  
 Shift_JISやUTF-8などの文字コード、タブ区切りなどのセパレータにも対応。
+
 ---
 
-## 🚀 特徴
+## 🧩 特徴
 
 - 大規模CSVでも高速処理（ストリームベース）
 - `include` / `exclude` モードで柔軟なカラム選択
@@ -15,8 +16,6 @@ Shift_JISやUTF-8などの文字コード、タブ区切りなどのセパレー
 - 処理履歴の保存（`Write-ExecutionHistory`）
 
 ---
-
-## オプション一覧（詳細）
 ## ⚙️ パラメータ一覧
 
 | パラメータ        | 必須 | 型       | デフォルト値 | 説明 |
