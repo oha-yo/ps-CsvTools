@@ -1,11 +1,13 @@
 param(
     [Parameter(Mandatory = $true)][string]$InputFile,
-    [Parameter()][string]$Encoding = "Shift_JIS",
     [Parameter()][int]$StartRow = 1,
     [Parameter()][int]$MaxRows = 0,
     [Parameter()][string]$Separator = ",",
+    [Parameter()][string]$Encoding = "Shift_JIS",
     [Parameter()][bool]$AddColumnNumbers = $false,
-    [Parameter()][int[]]$TargetColumns = @()  # 空なら全カラム
+    [Parameter()][int[]]$TargetColumns = @(),  # 空なら全カラム
+    [Parameter()][ValidateSet("include","exclude")]
+    [string]$Mode = "include"
 )
 
 # 区切り文字の正規化
@@ -21,9 +23,6 @@ switch ($Separator) {
 Get-ChildItem -Path "$PSScriptRoot\Common" -Recurse -Filter *.ps1 | ForEach-Object {
     . $_.FullName
 }
-
-# 実行パラメータを履歴ファイルへ保存
-Write-ExecutionHistory
 
 # EPPlus.dll の読み込み（ImportExcelモジュールから直接）
 $epplusPath = ".\Modules\ImportExcel\7.8.10\EPPlus.dll"
@@ -64,27 +63,35 @@ while (-not $reader.EndOfStream -and $currentLineNumber -lt ($StartRow - 1)) {
     $currentLineNumber++
 }
 
-Write-Debug "Separator: $Separator"
-$splitter = [CsvSplitter]::new($Separator)
-
-# 最初のデータ行を読み取り、列数を判定
+# 対象の先頭行を読み取り、列数を判定
 $firstDataLine = $reader.ReadLine()
+$splitter = [CsvSplitter]::new($Separator)
 $allColumns = $splitter.Split($firstDataLine)
 
-# 対象カラム（0始まりに変換）
+$columnCount = $allColumns.Count
+$allIndexes = 0..($columnCount - 1)
+
+# 対象カラムインデックスの取得
 $targetIndexes = if ($TargetColumns.Count -gt 0) {
-    $TargetColumns | ForEach-Object { $_ - 1 }
+    $adjusted = $TargetColumns | Where-Object { $_ -ge 1 } | ForEach-Object { $_ - 1 }
+    if ($Mode -eq "exclude") {
+        $allIndexes | Where-Object { $adjusted -notcontains $_ }
+    } else {
+        $adjusted
+    }
 } else {
-    # 全てのカラムを対象
-    0..($allColumns.Count - 1)
+    # TargetColumnsを指定しない場合はModeを問わず全カラムを対象にする。
+    $allIndexes
 }
 
-# 通番でヘッダー作成
-#$headers = @(1..$columnCount | ForEach-Object { "$_" })
 $headers = if ($TargetColumns.Count -gt 0) {
-    $TargetColumns | ForEach-Object { "$_" }
+    if ($Mode -eq "exclude") {
+        $targetIndexes | ForEach-Object { "$($_ + 1)" }
+    } else {
+        $TargetColumns | ForEach-Object { "$_" }
+    }
 } else {
-    1..($allColumns.Count) | ForEach-Object { "$_" }
+    1..$columnCount | ForEach-Object { "$_" }
 }
 
 # データ行を List[string] で読み込み（1行目含む）
@@ -128,15 +135,17 @@ foreach ($line in $linesToProcess) {
     }
 }
 
-Write-Debug "書き出し完了: $($rowIndex -1)行"
 # オートフィット・保存
 Write-Debug "ファイル保存中..."
 $sheet.Cells.AutoFitColumns()
 try {
     $package.SaveAs([System.IO.FileInfo]::new($OutputFile))
-    Write-Debug "Excelファイル出力完了: $OutputFile"
 } catch {
     Write-Error "ファイル保存時にエラーが発生しました: $($_.Exception.Message)"
     Write-Error "出力ファイルが既に開かれている可能性があります。閉じて再実行してください。"
     exit 1
 }
+# 実行パラメータを履歴ファイルへ保存
+Write-ExecutionHistory
+Write-Host "出力レコード数:  $($rowIndex -1)"
+Write-Host "エクセル出力完了(${Mode}): $OutputFile"

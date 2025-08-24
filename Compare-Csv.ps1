@@ -3,11 +3,11 @@ param(
     [Parameter(Mandatory = $true)][string]$InCsv2,
     [Parameter()][string]$ResultXlsx,
     [Parameter()][int[]]$KeyItem,
-    [Parameter()][int[]]$TargetColumns = @(),
     [Parameter()][int]$StartRow = 1,
     [Parameter()][int]$MaxRows = 0,
-    [Parameter()][string]$Encoding = "Shift_JIS",
     [Parameter()][string]$Separator = ",",
+    [Parameter()][string]$Encoding = "Shift_JIS",
+    [Parameter()][int[]]$TargetColumns = @(),
     [Parameter()][ValidateSet("exclude", "include")]
     [string]$Mode = "include"
 )
@@ -40,19 +40,14 @@ if (-not (Import-EpplusAssembly -DllPath $epplusPath)) {
     exit 1
 }
 
-# 実行パラメータを履歴ファイルへ保存
-Write-ExecutionHistory
-
 # CSV読み込み関数（遅延評価）
 function Read-CsvLines {
     param(
         [string]$Path,
-        [string]$Encoding,
+        [System.Text.Encoding]$Encoding,
         [string]$Separator
     )
-    $enc = Convert-EncodingName -enc $Encoding
-    $readerencoding = Get-ReaderEncoding -Encoding $enc
-    $reader = Get-StreamReader -FilePath $Path -Encoding $readerencoding
+    $reader = Get-StreamReader -FilePath $Path -Encoding $Encoding
     $splitter = [CsvSplitter]::new($Separator)
 
     try {
@@ -61,7 +56,7 @@ function Read-CsvLines {
             if ([string]::IsNullOrWhiteSpace($line)) { continue }
 
             $row = $splitter.SplitAndClean($line)
-            Write-Output (, $row)  # ← これが正しい構文
+            Write-Output (, $row)
         }
     }
     finally {
@@ -73,10 +68,12 @@ function Read-CsvLines {
 $package = New-Object OfficeOpenXml.ExcelPackage
 $sheet   = $package.Workbook.Worksheets.Add("Compare")
 
-# 最大列数の推定（先頭数行のみ）
-$peek1 = @(Read-CsvLines -Path $InCsv1 -Encoding $Encoding -Separator $Separator | Select-Object -First 50)
-$peek2 = @(Read-CsvLines -Path $InCsv2 -Encoding $Encoding -Separator $Separator | Select-Object -First 50)
-$maxCols = ($peek1 + $peek2 | ForEach-Object { $_.Count }) | Measure-Object -Maximum | Select-Object -ExpandProperty Maximum
+$readerencoding = Get-ReaderEncoding -Encoding $Encoding
+$maxCols = Get-CsvColumnCount -FilePath $InCsv1 `
+    -Encoding $readerencoding `
+    -Separator $Separator `
+    -StartRow $StartRow
+Write-Debug "対象行のカラム数: $maxCols"
 
 # 比較対象カラムの決定
 if ($TargetColumns.Count -eq 0) {
@@ -105,16 +102,13 @@ for ($i = 1; $i -le $TargetColumns.Count; $i++) {
     $sheet.Cells.Item(1,$colIndex++).Value = "列$i"
 }
 
-# イテレータ（遅延評価）
-$enum1Enumerator = @(Read-CsvLines -Path $InCsv1 -Encoding $Encoding -Separator $Separator).GetEnumerator()
-$enum2Enumerator = @(Read-CsvLines -Path $InCsv2 -Encoding $Encoding -Separator $Separator).GetEnumerator()
-
-
 # 比較処理
 $rowIndex = 2
 $rowNumber = 0
 $processedCount = 0
-
+# イテレータ（遅延評価）
+$enum1Enumerator = @(Read-CsvLines -Path $InCsv1 -Encoding $readerencoding -Separator $Separator).GetEnumerator()
+$enum2Enumerator = @(Read-CsvLines -Path $InCsv2 -Encoding $readerencoding -Separator $Separator).GetEnumerator()
 while ($enum1Enumerator.MoveNext()) {
     if (-not $enum2Enumerator.MoveNext()) { break }
 
@@ -156,6 +150,8 @@ $sheet.Cells.AutoFitColumns()
 try {
     $package.SaveAs([System.IO.FileInfo]::new($ResultXlsx))
     Write-Host "比較結果を出力しました: $ResultXlsx"
+    # 実行パラメータを履歴ファイルへ保存
+    Write-ExecutionHistory
 } catch {
     Write-Error "保存時にエラー: $($_.Exception.Message)"
     exit 1
