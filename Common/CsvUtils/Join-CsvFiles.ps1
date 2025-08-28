@@ -7,9 +7,9 @@ function Join-CsvFiles {
         [string]$Separator
     )
 
-    $reader1 = Get-StreamReader -FilePath $Csv1Path -Encoding $Encoding
-    $reader2 = Get-StreamReader -FilePath $Csv2Path -Encoding $Encoding
-    $writer  = New-StreamWriter -FilePath $OutCsvPath -Encoding $Encoding
+    $reader1 = Get-StreamReader $Csv1Path $Encoding
+    $reader2 = Get-StreamReader $Csv2Path $Encoding
+    $writer  = New-StreamWriter $OutCsvPath $Encoding
 
     try {
         while (-not $reader1.EndOfStream -and -not $reader2.EndOfStream) {

@@ -1,6 +1,6 @@
 function Get-WriterEncoding {
     param(
-        [string]$Encoding,
+        [string]$EncodingName,
         [bool]$HasBOM
     )
     switch ($Encoding) {

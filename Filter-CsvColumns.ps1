@@ -3,24 +3,22 @@ param(
     [Parameter()][int]$StartRow = 1,
     [Parameter()][int]$MaxRows = 0,
     [Parameter()][string]$Separator = ",",
-    [Parameter()][string]$Encoding = "Shift_JIS",
+    [Parameter()][string]$EncodingName = "Shift_JIS",
     [Parameter()][int[]]$TargetColumns = @(),
     [Parameter()][ValidateSet("exclude", "include")]
     [string]$Mode = "include"
 )
 
-# 区切り文字の正規化
-# Powershellでは「タブ」を `t で表記するため
-switch ($Separator) {
-    '\t' { $Separator = "`t" }
-    '\\t' { $Separator = "`t" }
-}
 # $PSScriptRoot\Common フォルダ以下のすべての.ps1ファイルを再帰的に取得し、
 # それぞれのファイルをドットソーシング（現在のスコープで読み込み）することで、
 # 関数やクラスをモジュール内に定義・利用可能にする
 Get-ChildItem -Path "$PSScriptRoot\Common" -Recurse -Filter *.ps1 | ForEach-Object {
     . $_.FullName
 }
+# 区切り文字を 内部処理用に正規化
+$Separator = Format-Separator $Separator
+# 文字コード名の表記揺れを正規の名称へ統一する
+$EncodingName = ConvertTo-EncodingName $EncodingName
 
 # インプットファイル存在チェック
 if (-not (Test-Path -Path $InputFile -PathType Leaf)) {
@@ -46,16 +44,9 @@ Write-Debug "folderPath    :$folderPath"
 Write-Debug "inputExtension:$inputExtension"
 Write-Debug "OutputFileName:$OutputFileName"
 
-#エンコード名の正規化(曖昧な入力エンコードをPowershellの正規なエンコード名に変換)
-$Encoding = Convert-EncodingName -enc $Encoding
-Write-Debug "Encoding      :$Encoding"
-
 # Stream Reader用エンコード取得
-$readerencoding = Get-ReaderEncoding -Encoding $Encoding
-$columnCount = Get-CsvColumnCount -FilePath $InputFile `
-    -Encoding $readerencoding `
-    -Separator $Separator `
-    -StartRow $StartRow
+$readerencoding = ConvertTo-Encoding -EncodingName $EncodingName
+$columnCount = Get-CsvColumnCount $InputFile $readerencoding $Separator $StartRow
 
 Write-Debug "対象行のカラム数: $columnCount"
 # カラム数チェック
@@ -74,18 +65,18 @@ $targetIndexes = if ($TargetColumns.Count -gt 0) {
 Write-Debug "targetIndexes:$targetIndexes"
 
 # Stream Readerの取得
-$reader = Get-StreamReader -FilePath $InputFile -Encoding $readerencoding
+$reader = Get-StreamReader $InputFile $readerencoding
 if ($null -eq $reader) {
     Write-Error "Stream Readerの作成に失敗しました。処理を中断します。"
     exit 1
 }
 # Stream Writer用エンコーディングの取得
 # インプットファイルのエンコーディングに合わせる
-$writerEncoding = Get-WriterEncoding -Encoding $Encoding -HasBOM $hasBOM
+$writerEncoding = Get-WriterEncoding $EncodingName $hasBOM
 Write-Debug "writerEncoding:$writerEncoding"
 
 # Stream Writerの取得
-$writer = Get-StreamWriter -OutputFileName $OutputFileName -Encoding $writerEncoding -NewLineChar $newLineChar
+$writer = Get-StreamWriter $OutputFileName $writerEncoding $newLineChar
 if ($null -eq $writer) {
     Write-Error "StreamWriterの作成に失敗しました。処理を中断します。"
     exit 1

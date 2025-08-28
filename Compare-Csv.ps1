@@ -6,21 +6,18 @@ param(
     [Parameter()][int]$StartRow = 1,
     [Parameter()][int]$MaxRows = 0,
     [Parameter()][string]$Separator = ",",
-    [Parameter()][string]$Encoding = "Shift_JIS",
+    [Parameter()][string]$EncodingName = "Shift_JIS",
     [Parameter()][int[]]$TargetColumns = @(),
     [Parameter()][ValidateSet("exclude", "include")]
     [string]$Mode = "include"
 )
-# 区切り文字の正規化
-# Powershellでは「タブ」を `t で表記するため
-switch ($Separator) {
-    '\t' { $Separator = "`t" }
-    '\\t' { $Separator = "`t" }
-}
+
 # 共通関数ロード
 Get-ChildItem -Path "$PSScriptRoot\Common" -Recurse -Filter *.ps1 | ForEach-Object {
     . $_.FullName
 }
+# 区切り文字を 内部処理用に正規化
+$Separator = Format-Separator $Separator
 
 # 入力チェック
 if (-not (Test-Path $InCsv1)) { Write-Error "ファイルが見つかりません: $InCsv1"; exit 1 }
@@ -40,9 +37,9 @@ if (-not (Import-EpplusAssembly -DllPath $epplusPath)) {
     exit 1
 }
 # 比較対象ファイルの行数カウント
-$readerencoding = Get-ReaderEncoding -Encoding $Encoding
-$lineCount1 = Get-LineCount -FilePath $InCsv1 -Encoding $readerencoding
-$lineCount2 = Get-LineCount -FilePath $InCsv2 -Encoding $readerencoding
+$Encoding = ConvertTo-Encoding $EncodingName
+$lineCount1 = Get-LineCount $InCsv1 $Encoding
+$lineCount2 = Get-LineCount $InCsv2 $Encoding
 if ($lineCount1 -ne $lineCount2) {
     Write-Error "CSVファイルのレコード数が一致しません。比較できません。"
     Write-Error "InCsv1: $lineCount1 行, InCsv2: $lineCount2 行"
@@ -54,19 +51,14 @@ $baseName = [System.IO.Path]::GetFileNameWithoutExtension($InCsv1)
 $directory = [System.IO.Path]::GetDirectoryName((Resolve-Path $InCsv1))
 $OutCsvPath = Join-Path $directory "$baseName`_temp_compare.csv"
 Write-Debug "比較用一時テーブル: $OutCsvPath"
-Write-Debug "Encoding            :$Encoding"
-Write-Debug "readerencoding      :$readerencoding"
-Join-CsvFiles -Csv1Path $InCsv1  -Csv2Path $InCsv2 -OutCsvPath $OutCsvPath `
-    -Encoding $readerencoding `
-    -Separator $Separator
+Write-Debug "EncodingName    :$EncodingName"
+Write-Debug "Encoding        :$Encoding"
+Join-CsvFiles -Csv1Path $InCsv1 $InCsv2 $OutCsvPath $Encoding $Separator
 Write-Debug "比較用一時テーブルを作成しました。"
 
 
 # 比較対象先頭行から比較対象カラム数を求める。
-$maxCols = Get-CsvColumnCount -FilePath $InCsv1 `
-    -Encoding $readerencoding `
-    -Separator $Separator `
-    -StartRow $StartRow
+$maxCols = Get-CsvColumnCount $InCsv1 $Encoding $Separator $StartRow
 Write-Debug "対象行のカラム数: $maxCols"
 
 # 比較対象カラムの決定
@@ -111,7 +103,7 @@ foreach ($colNum in $effectiveColumns) {
 }
 
 # 比較データファイル（temp_compare.csv）のリーダーを取得
-$reader = Get-StreamReader -FilePath $OutCsvPath -Encoding $readerencoding
+$reader = Get-StreamReader -FilePath $OutCsvPath -Encoding $Encoding
 $splitter = [CsvSplitter]::new($Separator)
 
 $rowIndex = 2

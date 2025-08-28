@@ -3,19 +3,12 @@ param(
     [Parameter()][int]$StartRow = 1,
     [Parameter()][int]$MaxRows = 0,
     [Parameter()][string]$Separator = ",",
-    [Parameter()][string]$Encoding = "Shift_JIS",
+    [Parameter()][string]$EncodingName = "Shift_JIS",
     [Parameter()][bool]$AddColumnNumbers = $false,
     [Parameter()][int[]]$TargetColumns = @(),  # 空なら全カラム
     [Parameter()][ValidateSet("include","exclude")]
     [string]$Mode = "include"
 )
-
-# 区切り文字の正規化
-# Powershellでは「タブ」を `t で表記するため
-switch ($Separator) {
-    '\t' { $Separator = "`t" }
-    '\\t' { $Separator = "`t" }
-}
 
 # $PSScriptRoot\Common フォルダ以下のすべての.ps1ファイルを再帰的に取得し、
 # それぞれのファイルをドットソーシング（現在のスコープで読み込み）することで、
@@ -23,6 +16,9 @@ switch ($Separator) {
 Get-ChildItem -Path "$PSScriptRoot\Common" -Recurse -Filter *.ps1 | ForEach-Object {
     . $_.FullName
 }
+
+# 区切り文字を 内部処理用に正規化
+$Separator = Format-Separator $Separator
 
 # EPPlus.dll の読み込み（ImportExcelモジュールから直接）
 $epplusPath = ".\Modules\ImportExcel\7.8.10\EPPlus.dll"
@@ -42,15 +38,15 @@ $OutputFile = [System.IO.Path]::ChangeExtension($InputFile, "xlsx")
 Write-Debug "OutputFile    : $OutputFile"
 
 #エンコード名の正規化(曖昧な入力エンコードをPowershellの正規なエンコード名に変換)
-$Encoding = Convert-EncodingName -enc $Encoding
-Write-Debug "Encoding      :$Encoding"
+$EncodingName = ConvertTo-EncodingName $EncodingName
+Write-Debug "EncodingName  :$EncodingName"
 
 # Stream Reader用エンコード取得
-$readerencoding = Get-ReaderEncoding -Encoding $Encoding
-Write-Debug "readerencoding:$readerencoding"
+$Encoding = ConvertTo-Encoding -EncodingName $EncodingName
+Write-Debug "Encoding      :$Encoding"
 
 # Stream Readerの取得
-$reader = Get-StreamReader -FilePath $InputFile -Encoding $readerencoding
+$reader = Get-StreamReader -FilePath $InputFile -Encoding $Encoding
 if ($null -eq $reader) {
     Write-Error "Stream Readerの作成に失敗しました。処理を中断します。"
     exit 1
