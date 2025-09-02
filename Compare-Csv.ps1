@@ -11,6 +11,30 @@ param(
     [Parameter()][ValidateSet("exclude", "include")]
     [string]$Mode = "include"
 )
+function Get-DiffColumnText {
+    param (
+        [string[]]$Values1,
+        [string[]]$Values2,
+        [int[]]$CompareIndexes
+    )
+
+    $diffColumns = @()
+
+    foreach ($i in $CompareIndexes) {
+        $val1 = if ($i -le $Values1.Count) { $Values1[$i - 1] } else { "<null>" }
+        $val2 = if ($i -le $Values2.Count) { $Values2[$i - 1] } else { "<null>" }
+
+        if ('"{0}"' -f $val1 -ne '"{0}"' -f $val2) {
+            $diffColumns += $i
+        }
+    }
+
+    if ($diffColumns.Count -gt 0) {
+        return "No. " + ($diffColumns -join ",")
+    } else {
+        return "無し"
+    }
+}
 
 # 共通関数ロード
 Get-ChildItem -Path "$PSScriptRoot\Common" -Recurse -Filter *.ps1 | ForEach-Object {
@@ -101,6 +125,7 @@ if ($KeyItem.Count -gt 0) {
 foreach ($colNum in $effectiveColumns) {
     $sheet.Cells.Item(1, $colIndex++).Value = "列$colNum"
 }
+$sheet.Cells.Item(1, $colIndex++).Value = "相違カラムNo."
 
 # 比較データファイル（temp_compare.csv）のリーダーを取得
 $reader = Get-StreamReader -FilePath $OutCsvPath -Encoding $Encoding
@@ -148,10 +173,14 @@ try {
             $result = if ($val1 -eq $val2) { "〇" } else { "×" }
             $sheet.Cells.Item($rowIndex, $colIndex++).Value = $result
         }
-
+        
+        $diffText = Get-DiffColumnText -Values1 $row1 -Values2 $row2 -CompareIndexes $effectiveColumns
+        $sheet.Cells.Item($rowIndex, $colIndex++).Value = $diffText
+        
         $rowIndex++
         $lineNo++
     }
+
 }
 finally {
     $reader.Close()

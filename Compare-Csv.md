@@ -44,6 +44,16 @@
 
 ```powershell
 .\Compare-Csv.ps1 `
+ -InCsv1 ./testdata/fruit1.csv `
+ -InCsv2 ./testdata/fruit2.csv `
+ -KeyItem 1,2 `
+ -EncodingName utf-8 `
+ -Separator "," `
+ -StartRow 1
+
+```
+```powershell
+.\Compare-Csv.ps1 `
   -InCsv1 ./testdata/fruit1.csv `
   -InCsv2 ./testdata/fruit2.csv `
   -KeyItem 1,2 `
@@ -52,3 +62,4 @@
   -TargetColumns 3,2 `
   -StartRow 1 `
   -Mode exclude
+```

@@ -82,9 +82,6 @@ if ($null -eq $writer) {
     exit 1
 }
 
-# 実行パラメータを履歴ファイルへ保存
-Write-ExecutionHistory
-
 # 行処理開始
 $currentLineNumber = 0
 $linesWritten = 0
@@ -127,6 +124,9 @@ while (-not $reader.EndOfStream) {
 }
 $reader.Close()
 $writer.Close()
+
+# 実行パラメータを履歴ファイルへ保存
+Write-ExecutionHistory
 
 Write-Host "出力行数: $linesWritten"
 Write-Host "${Mode} 処理後CSV出力完了: $OutputFileName"
