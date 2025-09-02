@@ -17,7 +17,7 @@ function Get-FileBOMAndNewLine {
             $buffer[2] -eq 0xBF)
         
         # 改行コード取得
-        $nlInfo = DetectNewLine -bytes $buffer
+        $nlInfo = DetectFirstNewLine -bytes $buffer
 
         return [PSCustomObject]@{
             HasBOM      = $hasBOM
@@ -27,22 +27,24 @@ function Get-FileBOMAndNewLine {
     }
     catch [System.IO.FileNotFoundException] {
         Write-Error "[$($MyInvocation.MyCommand.Name)] ファイルが見つかりません: $FilePath"
+        return $null
     }
     catch [System.UnauthorizedAccessException] {
         Write-Error "[$($MyInvocation.MyCommand.Name)] ファイルにアクセスできません: $FilePath"
+        return $null
     }
     catch {
         Write-Error "[$($MyInvocation.MyCommand.Name)] 予期しないエラーが発生しました: $($_.Exception.Message)"
+        return $null
     }
 }
 
 
 # 改行コードの取得
-function DetectNewLine {
+function DetectFirstNewLine {
     param([byte[]]$bytes)
 
     $newLineChar = "`n" # デフォルトは LF
-
     for ($i = 0; $i -lt $bytes.Length - 1; $i++) {
         if ($bytes[$i] -eq 0x0D -and $bytes[$i + 1] -eq 0x0A) {
             $newLineChar = "`r`n"

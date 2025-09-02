@@ -23,7 +23,7 @@
 | `StartRow`        |    | `int`    | `1`          | 処理開始行番号（1始まり）。ヘッダーをスキップする場合に指定。 |
 | `MaxRows`         |    | `int`    | `0`          | 最大処理行数。`0` を指定すると全行を処理。 |
 | `Separator`       |    | `string` | `","`        | 区切り文字。TSVの場合は `"\t"`（タブ）を指定。 |
-| `Encoding`        |    | `string` | `"Shift_JIS"` | ファイルの文字コード。`Shift_JIS` または `UTF-8` を指定。BOMの有無は自動判定。 |
+| `EncodingName`    |    | `string` | `"Shift_JIS"` | ファイルの文字コード。`Shift_JIS` または `UTF-8` を指定。BOMの有無は自動判定。 |
 | `AddColumnNumbers`|    | `bool` | `false`        | ヘッダーに列番号を追加するかどうか。 |
 | `TargetColumns`   |    | `int[]`  | ―            | 対象カラム番号（1始まり）。複数指定可能（例: `1,3,5`）。省略したら全てのカラムが対象 |
 | `Mode`            |    | `string` | `"include"`  | `"include"`：指定カラムのみ抽出、`"exclude"`：指定カラムを除外。 |

@@ -47,7 +47,7 @@ Shift_JISやUTF-8などの文字コード、タブ区切りなどのセパレー
 .\Filter-CsvColumns.ps1 `
 -InputFile ".\testdata\test_utf8.csv" `
 -StartRow 2 `
--Encoding utf8 `
+-EncodingName utf8 `
 -Separator "," `
 -Mode exclude `
 -TargetColumns 3,4  

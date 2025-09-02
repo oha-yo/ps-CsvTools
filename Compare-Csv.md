@@ -18,8 +18,7 @@
 
 ## 📦 必要環境
 
-- PowerShell 5.x 以上
-- [.NET Framework](https://dotnet.microsoft.com/)
+- PowerShell 7.x 以上
 - `EPPlus.dll`（`Modules/ImportExcel/7.8.10/EPPlus.dll` に配置）
 - 共通関数群（`Common/*.ps1`）が `$PSScriptRoot/Common` に存在すること
 
@@ -32,12 +31,12 @@
 | `InCsv2`        | ✔    | 比較対象CSVファイルのパス                                             |
 | `ResultXlsx`    |      | 出力先Excelファイルのパス（省略時は自動生成）                         |
 | `KeyItem`       |      | キー項目の列番号（1始まり、複数可）                                   |
-| `TargetColumns` |      | 比較対象列の番号（1始まり）                                           |
-| `Mode`          |      | `"include"` または `"exclude"`（include:指定列の比較  exclude:指定列を除いた比較）|
 | `StartRow`      |      | 比較開始行（1始まり）                                                 |
 | `MaxRows`       |      | 最大比較行数（0なら全ての行を対象）                                    |
-| `Encoding`      |      | 比較元ファイルの文字コード（例: `"utf-8"`, `"shift_jis"`）             |
 | `Separator`     |      | CSVファイル区切り文字（例: `","`, `"\t"`）                            |
+| `EncodingName`  |      | 比較元ファイルの文字コード（例: `"utf-8"`, `"shift_jis"`）             |
+| `TargetColumns` |      | 比較対象列の番号（1始まり）                                           |
+| `Mode`          |      | `"include"` または `"exclude"`（include:指定列の比較  exclude:指定列を除いた比較）|
 
 ---
 
@@ -48,7 +47,7 @@
   -InCsv1 ./testdata/fruit1.csv `
   -InCsv2 ./testdata/fruit2.csv `
   -KeyItem 1,2 `
-  -Encoding utf-8 `
+  -EncodingName utf-8 `
   -Separator "," `
   -TargetColumns 3,2 `
   -StartRow 1 `
