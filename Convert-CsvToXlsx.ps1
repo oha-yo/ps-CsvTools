@@ -10,15 +10,16 @@ param(
     [string]$Mode = "include"
 )
 
-# $PSScriptRoot\Common フォルダ以下のすべての.ps1ファイルを再帰的に取得し、
-# それぞれのファイルをドットソーシング（現在のスコープで読み込み）することで、
-# 関数やクラスをモジュール内に定義・利用可能にする
+# 共通関数ロード
 Get-ChildItem -Path "$PSScriptRoot\Common" -Recurse -Filter *.ps1 | ForEach-Object {
     . $_.FullName
 }
 
 # 区切り文字を 内部処理用に正規化
 $Separator = Format-Separator $Separator
+#エンコード名の正規化(曖昧な入力エンコードをPowershellの正規なエンコード名に変換)
+$EncodingName = ConvertTo-EncodingName $EncodingName
+Write-Debug "EncodingName  :$EncodingName"
 
 # EPPlus.dll の読み込み（ImportExcelモジュールから直接）
 $epplusPath = ".\Modules\ImportExcel\7.8.10\EPPlus.dll"
@@ -36,10 +37,6 @@ Write-Debug "InputFile     : $InputFile"
 # 出力ファイル(FULL PATH)作成
 $OutputFile = [System.IO.Path]::ChangeExtension($InputFile, "xlsx")
 Write-Debug "OutputFile    : $OutputFile"
-
-#エンコード名の正規化(曖昧な入力エンコードをPowershellの正規なエンコード名に変換)
-$EncodingName = ConvertTo-EncodingName $EncodingName
-Write-Debug "EncodingName  :$EncodingName"
 
 # Stream Reader用エンコード取得
 $Encoding = ConvertTo-Encoding -EncodingName $EncodingName

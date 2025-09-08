@@ -17,7 +17,7 @@ Get-ChildItem -Path "$PSScriptRoot\Common" -Recurse -Filter *.ps1 | ForEach-Obje
 }
 # 区切り文字を 内部処理用に正規化
 $Separator = Format-Separator $Separator
-# 文字コード名の表記揺れを正規の名称へ統一する
+#エンコード名の正規化(曖昧な入力エンコードをPowershellの正規なエンコード名に変換)
 $EncodingName = ConvertTo-EncodingName $EncodingName
 
 # インプットファイル存在チェック
@@ -127,6 +127,5 @@ $writer.Close()
 
 # 実行パラメータを履歴ファイルへ保存
 Write-ExecutionHistory
-
 Write-Host "出力行数: $linesWritten"
 Write-Host "${Mode} 処理後CSV出力完了: $OutputFileName"

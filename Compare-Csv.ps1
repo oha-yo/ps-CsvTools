@@ -11,30 +11,78 @@ param(
     [Parameter()][ValidateSet("exclude", "include")]
     [string]$Mode = "include"
 )
-function Get-DiffColumnText {
-    param (
-        [string[]]$Values1,
-        [string[]]$Values2,
-        [int[]]$CompareIndexes
-    )
-
-    $diffColumns = @()
-
-    foreach ($i in $CompareIndexes) {
-        $val1 = if ($i -le $Values1.Count) { $Values1[$i - 1] } else { "<null>" }
-        $val2 = if ($i -le $Values2.Count) { $Values2[$i - 1] } else { "<null>" }
-
-        if ('"{0}"' -f $val1 -ne '"{0}"' -f $val2) {
-            $diffColumns += $i
-        }
-    }
-
-    if ($diffColumns.Count -gt 0) {
-        return "No. " + ($diffColumns -join ",")
-    } else {
-        return "無し"
-    }
-}
+# function Compare-Columns {
+#     param(
+#         [string[]]$Row1,
+#         [string[]]$Row2,
+#         [int[]]$CompareIndexes
+#     )
+# 
+#     $results = @()
+#     foreach ($i in $CompareIndexes) {
+#         $val1 = if ($i -le $Row1.Count) { $Row1[$i - 1] } else { "<null>" }
+#         $val2 = if ($i -le $Row2.Count) { $Row2[$i - 1] } else { "<null>" }
+#         $results += if ($val1 -eq $val2) { "〇" } else { "×" }
+#     }
+#     return $results
+# }
+# 
+# function Get-DiffColumnText {
+#     param (
+#         [string[]]$Values1,
+#         [string[]]$Values2,
+#         [int[]]$CompareIndexes
+#     )
+# 
+#     #$diffColumns = @()
+#     $diffColumns = [System.Collections.Generic.List[int]]::new()
+#     foreach ($i in $CompareIndexes) {
+#         $val1 = if ($i -le $Values1.Count) { $Values1[$i - 1] } else { "<null>" }
+#         $val2 = if ($i -le $Values2.Count) { $Values2[$i - 1] } else { "<null>" }
+# 
+#         if ($val1 -ne $val2) {
+#         #if ('"{0}"' -f $val1 -ne '"{0}"' -f $val2) {
+#             #$diffColumns += $i
+#             $diffColumns.Add($i)
+#         }
+#     }
+# 
+#     if ($diffColumns.Count -gt 0) {
+#         # List を配列に変換して文字列結合
+#         return "No. " + ($diffColumns.ToArray() -join ",")
+#         #return "No. " + ($diffColumns -join ",")
+#     } else {
+#         return "無し"
+#     }
+# }
+# 
+# function Write-CompareRowToSheet {
+#     param(
+#         [OfficeOpenXml.ExcelWorksheet]$Sheet,
+#         [int]$RowIndex,
+#         [string[]]$Row1,
+#         [string[]]$Row2,
+#         [int[]]$EffectiveColumns,
+#         [int[]]$KeyItem,
+#         [int]$LineNo
+#     )
+#     $colIndex = 1
+#     # 行番号
+#     $Sheet.Cells.Item($RowIndex, $colIndex++).Value = $LineNo
+#     # キー項目
+#     foreach ($idx in $KeyItem) {
+#         $val = if ($idx -le $Row1.Count) { $Row1[$idx - 1] } else { "" }
+#         $Sheet.Cells.Item($RowIndex, $colIndex++).Value = $val
+#     }
+#     # 列比較結果（〇/×）
+#     $compareResults = Compare-Columns -Row1 $Row1 -Row2 $Row2 -CompareIndexes $EffectiveColumns
+#     foreach ($res in $compareResults) {
+#         $Sheet.Cells.Item($RowIndex, $colIndex++).Value = $res
+#     }
+#     # 差異列番号
+#     $diffText = Get-DiffColumnText $Row1 $Row2 $EffectiveColumns
+#     $Sheet.Cells.Item($RowIndex, $colIndex++).Value = $diffText
+# }
 
 # 共通関数ロード
 Get-ChildItem -Path "$PSScriptRoot\Common" -Recurse -Filter *.ps1 | ForEach-Object {
@@ -42,6 +90,9 @@ Get-ChildItem -Path "$PSScriptRoot\Common" -Recurse -Filter *.ps1 | ForEach-Obje
 }
 # 区切り文字を 内部処理用に正規化
 $Separator = Format-Separator $Separator
+#エンコード名の正規化(曖昧な入力エンコードをPowershellの正規なエンコード名に変換)
+$EncodingName = ConvertTo-EncodingName $EncodingName
+Write-Debug "EncodingName  :$EncodingName"
 
 # 入力チェック
 if (-not (Test-Path $InCsv1)) { Write-Error "ファイルが見つかりません: $InCsv1"; exit 1 }
@@ -74,12 +125,11 @@ if ($lineCount1 -ne $lineCount2) {
 $baseName = [System.IO.Path]::GetFileNameWithoutExtension($InCsv1)
 $directory = [System.IO.Path]::GetDirectoryName((Resolve-Path $InCsv1))
 $OutCsvPath = Join-Path $directory "$baseName`_temp_compare.csv"
-Write-Debug "比較用一時テーブル: $OutCsvPath"
+Write-Debug "比較用一時テーブル:$OutCsvPath"
 Write-Debug "EncodingName    :$EncodingName"
 Write-Debug "Encoding        :$Encoding"
 Join-CsvFiles -Csv1Path $InCsv1 $InCsv2 $OutCsvPath $Encoding $Separator
 Write-Debug "比較用一時テーブルを作成しました。"
-
 
 # 比較対象先頭行から比較対象カラム数を求める。
 $maxCols = Get-CsvColumnCount $InCsv1 $Encoding $Separator $StartRow
@@ -112,7 +162,6 @@ $sheet   = $package.Workbook.Worksheets.Add("Compare")
 # 結果出力ファイルのヘッダー行書き込み
 $colIndex = 1
 $sheet.Cells.Item(1,$colIndex++).Value = "行番号"
-
 if ($KeyItem.Count -gt 0) {
     $ki = 1
     foreach ($idx in $KeyItem) {
@@ -120,87 +169,53 @@ if ($KeyItem.Count -gt 0) {
         $ki++
     }
 }
-
 # 出力列名は TargetColumns の順番に「列1」「列2」…と振り直す
 foreach ($colNum in $effectiveColumns) {
     $sheet.Cells.Item(1, $colIndex++).Value = "列$colNum"
 }
 $sheet.Cells.Item(1, $colIndex++).Value = "相違カラムNo."
 
-# 比較データファイル（temp_compare.csv）のリーダーを取得
+# 比較データファイルのリーダーを取得
 $reader = Get-StreamReader -FilePath $OutCsvPath -Encoding $Encoding
 $splitter = [CsvSplitter]::new($Separator)
-
 $rowIndex = 2
 $lineNo = 1
-
 try {
     while (-not $reader.EndOfStream) {
         $line = $reader.ReadLine()
-
         # MaxRows制限
         if ($MaxRows -gt 0 -and $lineNo -gt $MaxRows) { break }
-
         # StartRowスキップ
         if ($lineNo -lt $StartRow) {
             $lineNo++
             continue
         }
-
-        # 1行を分割（左右のCSVが連結されている前提）
         $row = $splitter.SplitAndClean($line)
         $row1 = $row[0..($maxCols - 1)]
         $row2 = $row[$maxCols..($row.Count - 1)]
-
-        $colIndex = 1
-        $sheet.Cells.Item($rowIndex, $colIndex++).Value = $lineNo
-
-        # キー項目出力（左側CSV1から）
-        foreach ($idx in $KeyItem) {
-            $val = if ($idx -le $row1.Count) { $row1[$idx - 1] } else { "" }
-            $sheet.Cells.Item($rowIndex, $colIndex++).Value = $val
-        }
-
-        # 比較結果（〇/×）の書き込み
-        foreach ($i in $effectiveColumns) {
-            $raw1 = if ($i -le $row1.Count) { $row1[$i - 1] } else { "<null>" }
-            $raw2 = if ($i -le $row2.Count) { $row2[$i - 1] } else { "<null>" }
-            $val1 = '"{0}"' -f $raw1
-            $val2 = '"{0}"' -f $raw2
-
-            Write-Debug "Compare: val1=$val1 val2=$val2"
-
-            $result = if ($val1 -eq $val2) { "〇" } else { "×" }
-            $sheet.Cells.Item($rowIndex, $colIndex++).Value = $result
-        }
-        
-        $diffText = Get-DiffColumnText -Values1 $row1 -Values2 $row2 -CompareIndexes $effectiveColumns
-        $sheet.Cells.Item($rowIndex, $colIndex++).Value = $diffText
-        
+        Write-CompareRowToSheet $sheet $rowIndex $row1 $row2 $effectiveColumns $KeyItem $lineNo
         $rowIndex++
         $lineNo++
     }
-
 }
 finally {
     $reader.Close()
 }
 
-## --------------------------------------------------------------------------
-# 保存
-$sheet.Cells.AutoFitColumns()
+$status_code=1
 try {
+    # Excelへ保存
+    $sheet.Cells.AutoFitColumns()
     $package.SaveAs([System.IO.FileInfo]::new($ResultXlsx))
     Write-Information "比較結果を出力しました: $ResultXlsx"
     # 実行パラメータを履歴ファイルへ保存
-    $cmd = Get-Command Write-ExecutionHistory -ErrorAction SilentlyContinue
-    if ($cmd -and $cmd.CommandType -eq 'Function') {
-        Write-ExecutionHistory
-    } else {
-        Write-Verbose "Write-ExecutionHistory が関数として定義されていないため、履歴保存をスキップします。"
-    }
-    exit 0
+    Write-ExecutionHistory
+    $status_code=0
+    Write-Host "出力レコード数: $($rowIndex - 2)"
+    Write-Host "出力ファイル: $(Resolve-Path $ResultXlsx)"
+
 } catch {
     Write-Error "保存時にエラー: $($_.Exception.Message)"
-    exit 1
+    $status_code=1
 }
+exit $status_code
