@@ -19,7 +19,8 @@ Get-ChildItem -Path "$PSScriptRoot\Common" -Recurse -Filter *.ps1 | ForEach-Obje
 $Separator = Format-Separator $Separator
 #エンコード名の正規化(曖昧な入力エンコードをPowershellの正規なエンコード名に変換)
 $EncodingName = ConvertTo-EncodingName $EncodingName
-
+# スクリプトの先頭で絶対パスに変換する
+$InputFile = Resolve-Path $InputFile
 # インプットファイル存在チェック
 if (-not (Test-Path -Path $InputFile -PathType Leaf)) {
     Write-Error "ファイルが見つかりません: $InputFile"

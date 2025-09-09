@@ -27,6 +27,9 @@ if (-not (Import-EpplusAssembly -DllPath $epplusPath)) {
     Write-Error "EPPlus.dllが見つかりません: $epplusPath"
     exit 1
 }
+# スクリプトの先頭で絶対パスに変換する
+$InputFile = Resolve-Path $InputFile
+
 # インプットファイル存在チェック
 if (-not (Test-Path -Path $InputFile -PathType Leaf)) {
     Write-Error "ファイルが見つかりません: $InputFile"
