@@ -44,7 +44,7 @@
 ---
 
 ## 🚀 使い方
-
+#### utf-8で書かれたcsvファイルの比較結果をエクセルファイルへ出力する。TargetColumnsパラメータを指定していないので全カラムを比較対象とする。
 ```powershell
 .\Compare-Csv.ps1 `
  -InCsv1 ./testdata/fruit1.csv `
@@ -55,14 +55,15 @@
  -StartRow 1
 
 ```
+#### utf-8で書かれたcsvファイルの比較結果をエクセルファイルへ出力する。TargetColumnsパラメータで指定したカラムを「除いて（exclude）」比較する。
 ```powershell
 .\Compare-Csv.ps1 `
-  -InCsv1 ./testdata/fruit1.csv `
-  -InCsv2 ./testdata/fruit2.csv `
-  -KeyItem 1,2 `
+  -InCsv1 ./testdata/fruit1-tab.csv `
+  -InCsv2 ./testdata/fruit2-tab.csv `
+  -KeyItem 1 `
   -EncodingName utf-8 `
-  -Separator "," `
-  -TargetColumns 3,2 `
+  -Separator "\t" `
   -StartRow 1 `
+  -TargetColumns 3,2 `
   -Mode exclude
 ```

@@ -23,11 +23,13 @@ Write-Debug "EncodingName  :$EncodingName"
 
 # EPPlus.dll の読み込み（ImportExcelモジュールから直接）
 $epplusPath = ".\Modules\ImportExcel\7.8.10\EPPlus.dll"
+# 絶対パスに変換
+$epplusPath = Resolve-Path $epplusPath
 if (-not (Import-EpplusAssembly -DllPath $epplusPath)) {
     Write-Error "EPPlus.dllが見つかりません: $epplusPath"
     exit 1
 }
-# スクリプトの先頭で絶対パスに変換する
+# 絶対パスに変換する
 $InputFile = Resolve-Path $InputFile
 
 # インプットファイル存在チェック

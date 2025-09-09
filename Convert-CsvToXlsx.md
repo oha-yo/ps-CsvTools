@@ -31,7 +31,7 @@
 ---
 
 ## 🚀 使用例
-
+#### 指定csvファイル対象カラムのみをエクセルファイルへ出力する。TargetColumnsパラメータを指定している(include)カラムを対象とする。AddColumnNumbers $trueとする事で、エクセルに項目番号が出力される。
 ```powershell
 .\Convert-CsvToXlsx.ps1 `
 -InputFile  ".\testdata\test_sjis.csv" `

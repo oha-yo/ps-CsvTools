@@ -22,7 +22,7 @@ $Separator = Format-Separator $Separator
 $EncodingName = ConvertTo-EncodingName $EncodingName
 Write-Debug "EncodingName  :$EncodingName"
 
-# スクリプトの先頭で絶対パスに変換する
+# 絶対パスに変換する
 $InCsv1 = Resolve-Path $InCsv1
 $InCsv2 = Resolve-Path $InCsv2
 
@@ -39,6 +39,8 @@ if (-not $ResultXlsx) {
 
 # EPPlus.dll 読み込み
 $epplusPath = ".\Modules\ImportExcel\7.8.10\EPPlus.dll"
+# 絶対パスに変換
+$epplusPath = Resolve-Path $epplusPath
 if (-not (Import-EpplusAssembly -DllPath $epplusPath)) {
     Write-Error "EPPlus.dllが見つかりません: $epplusPath"
     exit 1
