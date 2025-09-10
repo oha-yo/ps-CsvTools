@@ -23,20 +23,16 @@ Write-Debug "EncodingName  :$EncodingName"
 
 # EPPlus.dll の読み込み（ImportExcelモジュールから直接）
 $epplusPath = ".\Modules\ImportExcel\7.8.10\EPPlus.dll"
+
 # 絶対パスに変換
 $epplusPath = Resolve-Path $epplusPath
 if (-not (Import-EpplusAssembly -DllPath $epplusPath)) {
     Write-Error "EPPlus.dllが見つかりません: $epplusPath"
     exit 1
 }
-# 絶対パスに変換する
-$InputFile = Resolve-Path $InputFile
 
-# インプットファイル存在チェック
-if (-not (Test-Path -Path $InputFile -PathType Leaf)) {
-    Write-Error "ファイルが見つかりません: $InputFile"
-    exit 1
-}
+# 存在確認をしつつ絶対パスに変換する
+$InputFile = Get-ValidatedFullPath -Path $InputFile -Label "InputFile"
 Write-Debug "InputFile     : $InputFile"
 
 # 出力ファイル(FULL PATH)作成

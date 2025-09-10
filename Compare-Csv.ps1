@@ -22,19 +22,28 @@ $Separator = Format-Separator $Separator
 $EncodingName = ConvertTo-EncodingName $EncodingName
 Write-Debug "EncodingName  :$EncodingName"
 
-# 絶対パスに変換する
-$InCsv1 = Resolve-Path $InCsv1
-$InCsv2 = Resolve-Path $InCsv2
-
-# 入力チェック
-if (-not (Test-Path $InCsv1)) { Write-Error "ファイルが見つかりません: $InCsv1"; exit 1 }
-if (-not (Test-Path $InCsv2)) { Write-Error "ファイルが見つかりません: $InCsv2"; exit 1 }
+# 存在確認をしつつ絶対パスに変換する
+$InCsv1 = Get-ValidatedFullPath -Path $InCsv1 -Label "InCsv1"
+$InCsv2 = Get-ValidatedFullPath -Path $InCsv2 -Label "InCsv2"
 
 # 比較結果出力先ファイル名の取得
 if (-not $ResultXlsx) {
+    # 比較基準ファイル名から自動生成
     $base = [System.IO.Path]::GetFileNameWithoutExtension($InCsv1)
     $dir  = [System.IO.Path]::GetDirectoryName((Resolve-Path $InCsv1))
     $ResultXlsx = Join-Path $dir ($base + "_result.xlsx")
+    Write-Debug "dir        :$dir"
+    Write-Debug "自動生成:$ResultXlsx"
+} else {
+    # パラメータ指定の場合
+    if (-not [System.IO.Path]::IsPathRooted($ResultXlsx)) {
+        # フルパス指定でない場合
+        $ResultXlsx = [System.IO.Path]::GetFullPath($ResultXlsx)
+    }
+    $parentDir = [System.IO.Path]::GetDirectoryName($ResultXlsx)
+    if (-not (Test-Path $parentDir -PathType Container)) {
+        throw "出力先フォルダが存在しません: $parentDir"
+    }
 }
 
 # EPPlus.dll 読み込み
@@ -53,7 +62,7 @@ if ($lineCount1 -ne $lineCount2) {
     Write-Error "CSVファイルのレコード数が一致しません。比較できません。"
     Write-Error "InCsv1: $lineCount1 行, InCsv2: $lineCount2 行"
     exit 1
-}
+} 
 
 # メモリを効率よく利用するためあらかじめCSV1とCSV2を結合しtemp_compare.csvを作成する。
 $baseName = [System.IO.Path]::GetFileNameWithoutExtension($InCsv1)
