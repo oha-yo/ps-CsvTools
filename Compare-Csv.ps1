@@ -1,4 +1,4 @@
-param(
+﻿param(
     [Parameter(Mandatory = $true)][string]$InCsv1,
     [Parameter(Mandatory = $true)][string]$InCsv2,
     [Parameter()][string]$ResultXlsx,
