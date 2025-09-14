@@ -1,4 +1,4 @@
-
+﻿
 function ConvertTo-Encoding {
     param([string]$EncodingName)
 #   if ($EncodingName -is [System.Text.Encoding]) {

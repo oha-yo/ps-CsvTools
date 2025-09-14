@@ -20,7 +20,7 @@ Get-ChildItem -Path "$PSScriptRoot\Common" -Recurse -Filter *.ps1 | ForEach-Obje
 $Separator = Format-Separator $Separator
 #エンコード名の正規化(曖昧な入力エンコードをPowershellの正規なエンコード名に変換)
 $EncodingName = ConvertTo-EncodingName $EncodingName
-Write-Debug "EncodingName  :$EncodingName"
+Write-Verbose "EncodingName  :$EncodingName"
 
 # 存在確認をしつつ絶対パスに変換する
 $InCsv1 = Get-ValidatedFullPath -Path $InCsv1 -Label "InCsv1"
@@ -32,8 +32,8 @@ if (-not $ResultXlsx) {
     $base = [System.IO.Path]::GetFileNameWithoutExtension($InCsv1)
     $dir  = [System.IO.Path]::GetDirectoryName((Resolve-Path $InCsv1))
     $ResultXlsx = Join-Path $dir ($base + "_result.xlsx")
-    Write-Debug "dir        :$dir"
-    Write-Debug "自動生成:$ResultXlsx"
+    Write-Verbose "dir        :$dir"
+    Write-Verbose "自動生成:$ResultXlsx"
 } else {
     # パラメータ指定の場合
     if (-not [System.IO.Path]::IsPathRooted($ResultXlsx)) {
@@ -68,19 +68,19 @@ if ($lineCount1 -ne $lineCount2) {
 $baseName = [System.IO.Path]::GetFileNameWithoutExtension($InCsv1)
 $directory = [System.IO.Path]::GetDirectoryName((Resolve-Path $InCsv1))
 $OutCsvPath = Join-Path $directory "$baseName`_temp_compare.csv"
-Write-Debug "比較用一時テーブル:$OutCsvPath"
-Write-Debug "EncodingName    :$EncodingName"
-Write-Debug "Encoding        :$Encoding"
+Write-Verbose "比較用一時テーブル:$OutCsvPath"
+Write-Verbose "EncodingName    :$EncodingName"
+Write-Verbose "Encoding        :$Encoding"
 Join-CsvFiles -Csv1Path $InCsv1 $InCsv2 $OutCsvPath $Encoding $Separator
-Write-Debug "比較用一時テーブルを作成しました。"
+Write-Verbose "比較用一時テーブルを作成しました。"
 
 # 比較対象先頭行から比較対象カラム数を求める。
 $maxCols = Get-CsvColumnCount $InCsv1 $Encoding $Separator $StartRow
-Write-Debug "対象行のカラム数: $maxCols"
+Write-Verbose "対象行のカラム数: $maxCols"
 
 # 比較対象カラムの決定
 if ($TargetColumns.Count -eq 0) {
-    Write-Debug "TargetColumns が未指定または空のため、全カラムを対象にします。"
+    Write-Verbose "TargetColumns が未指定または空のため、全カラムを対象にします。"
     $TargetColumns = 1..$maxCols
 }
 # Modeによって比較対象カラムが決定する

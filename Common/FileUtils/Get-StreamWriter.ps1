@@ -1,4 +1,4 @@
-
+﻿
 # Stream Writerを取得
 function Get-StreamWriter {
     param(

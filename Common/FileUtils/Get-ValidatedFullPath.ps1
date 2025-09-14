@@ -1,4 +1,4 @@
-# $Pathの存在確認と、相対パスの場合フルパスにして返却
+﻿# $Pathの存在確認と、相対パスの場合フルパスにして返却
 #
 function Get-ValidatedFullPath {
     param (

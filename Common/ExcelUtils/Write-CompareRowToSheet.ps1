@@ -1,4 +1,4 @@
-function Compare-Columns {
+﻿function Compare-Columns {
     param(
         [string[]]$Row1,
         [string[]]$Row2,

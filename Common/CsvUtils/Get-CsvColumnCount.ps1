@@ -1,4 +1,4 @@
-function Get-CsvColumnCount {
+﻿function Get-CsvColumnCount {
     param (
         [string]$FilePath,
         [System.Text.Encoding]$Encoding,
@@ -11,7 +11,7 @@ function Get-CsvColumnCount {
         return $null
     }
 
-    #Write-Debug "Encoding--->:$Encoding"
+    #Write-Verbose "Encoding--->:$Encoding"
     $reader = Get-StreamReader $FilePath $Encoding
     if ($null -eq $reader) {
         Write-Error "Stream Readerの作成に失敗しました。"

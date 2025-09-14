@@ -1,4 +1,4 @@
-class CsvSplitter {
+﻿class CsvSplitter {
     [string]$Pattern
 
     CsvSplitter([string]$Separator) {

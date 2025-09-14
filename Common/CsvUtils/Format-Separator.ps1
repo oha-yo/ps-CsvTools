@@ -1,4 +1,4 @@
-# 区切り文字を 内部処理用に正規化
+﻿# 区切り文字を 内部処理用に正規化
 # Powershellでは「タブ」を `t で表記するため
 function Format-Separator {
     param(

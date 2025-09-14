@@ -1,4 +1,4 @@
-
+﻿
 function Write-ExecutionHistory {
     param(
         [string]$LogExtension = ".history"
@@ -17,20 +17,24 @@ function Write-ExecutionHistory {
 
         # パラメータを再構築
         $invocationLine = ".\" + [System.IO.Path]::GetFileName($scriptPath) + " " +
-            ($callerInvocation.BoundParameters.GetEnumerator() | ForEach-Object {
-                $key = $_.Key
-                $value = if ($_.Value -is [Array]) {
-                    $_.Value -join ','
-                } else {
-                    $_.Value
-                }
+        ($callerInvocation.BoundParameters.GetEnumerator() | ForEach-Object {
+            $key = $_.Key
+            $value = $_.Value
 
-                if ($value -is [string] -and $value.Contains(' ')) {
-                    "-$key `"$value`""
-                } else {
-                    "-$key $value"
-                }
-            }) -join ' '
+            # スイッチ型（Verboseなど）はキーだけ出力
+            if ($key -eq 'Verbose' -and $value -eq $true) {
+                "-$key"
+            }
+            elseif ($value -is [Array]) {
+                "-$key $($value -join ',')"
+            }
+            elseif ($value -is [string] -and $value -match '[\s,"]') {
+                "-$key `"$value`""
+            }
+            else {
+                "-$key $value"
+            }
+        }) -join ' '
 
         # タイムスタンプ付きで書き込み
         $timestamp = Get-Date -Format "[yyyy-MM-dd HH:mm:ss]"

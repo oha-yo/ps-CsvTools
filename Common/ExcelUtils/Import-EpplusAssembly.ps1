@@ -1,4 +1,4 @@
-# EPPlus.dllを PowerShell に読み込んで、型情報（.NETクラス）を使えるようにする。
+﻿# EPPlus.dllを PowerShell に読み込んで、型情報（.NETクラス）を使えるようにする。
 function Import-EpplusAssembly {
     param(
         [Parameter(Mandatory)]

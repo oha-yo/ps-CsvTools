@@ -1,4 +1,4 @@
-param(
+﻿param(
     [Parameter(Mandatory = $true)][string]$InputFile,
     [Parameter()][int]$StartRow = 1,
     [Parameter()][int]$MaxRows = 0,
@@ -22,31 +22,31 @@ $EncodingName = ConvertTo-EncodingName $EncodingName
 
 # 存在確認をしつつ絶対パスに変換する
 $InputFile = Get-ValidatedFullPath -Path $InputFile -Label "InputFile"
-Write-Debug "InputFile     : $InputFile"
+Write-Verbose "InputFile     : $InputFile"
 
 # 入力ファイルの改行コード取得とBom判定
 $encodingInfo = Get-FileBOMAndNewLine -FilePath $InputFile
 $hasBOM       = $encodingInfo.HasBOM
 $newLineChar  = $encodingInfo.newLineChar
 $displayName  = $encodingInfo.DisplayName
-Write-Debug "hasBOM        :$hasBOM"
-Write-Debug "newLineChar   :$displayName"
+Write-Verbose "hasBOM        :$hasBOM"
+Write-Verbose "newLineChar   :$displayName"
 
 # 出力ファイル(FULL PATH)作成
 $baseName = [System.IO.Path]::GetFileNameWithoutExtension($InputFile)
 $folderPath = [System.IO.Path]::GetDirectoryName($InputFile)
 $inputExtension = [System.IO.Path]::GetExtension($InputFile)
 $OutputFileName = [System.IO.Path]::Combine($folderPath, "${baseName}_${Mode}${inputExtension}")
-Write-Debug "baseName      :$baseName"
-Write-Debug "folderPath    :$folderPath"
-Write-Debug "inputExtension:$inputExtension"
-Write-Debug "OutputFileName:$OutputFileName"
+Write-Verbose "baseName      :$baseName"
+Write-Verbose "folderPath    :$folderPath"
+Write-Verbose "inputExtension:$inputExtension"
+Write-Verbose "OutputFileName:$OutputFileName"
 
 # Stream Reader用エンコード取得
 $readerencoding = ConvertTo-Encoding -EncodingName $EncodingName
 $columnCount = Get-CsvColumnCount $InputFile $readerencoding $Separator $StartRow
 
-Write-Debug "対象行のカラム数: $columnCount"
+Write-Verbose "対象行のカラム数: $columnCount"
 # カラム数チェック
 if ($columnCount -lt 1) {
     Write-Error "対象カラムが見つかりません: $columnCount"
@@ -60,7 +60,7 @@ $targetIndexes = if ($TargetColumns.Count -gt 0) {
     # 全てのカラムを対象
     0..($columnCount - 1)
 }
-Write-Debug "targetIndexes:$targetIndexes"
+Write-Verbose "targetIndexes:$targetIndexes"
 
 # Stream Readerの取得
 $reader = Get-StreamReader $InputFile $readerencoding
@@ -71,7 +71,7 @@ if ($null -eq $reader) {
 # Stream Writer用エンコーディングの取得
 # インプットファイルのエンコーディングに合わせる
 $writerEncoding = Get-WriterEncoding $EncodingName $hasBOM
-Write-Debug "writerEncoding:$writerEncoding"
+Write-Verbose "writerEncoding:$writerEncoding"
 
 # Stream Writerの取得
 $writer = Get-StreamWriter $OutputFileName $writerEncoding $newLineChar
@@ -96,7 +96,7 @@ while (-not $reader.EndOfStream) {
         break
     }
     $columns = $splitter.Split($line)
-    # Write-Debug "columns count: $(@($columns).Count)"
+    # Write-Verbose "columns count: $(@($columns).Count)"
     $filtered = @(
         for ($i = 0; $i -lt $columns.Count; $i++) {
             $isTarget = @($targetIndexes) -contains $i
@@ -108,11 +108,11 @@ while (-not $reader.EndOfStream) {
             }
         }
     )
-    #Write-Debug "columns:$columns"
-    #Write-Debug "filtered:$filtered"
+    #Write-Verbose "columns:$columns"
+    #Write-Verbose "filtered:$filtered"
 
     # 対象カラム配列にセパレータを合わせて文字列化
-    #Write-Debug "filtered:$filtered"
+    #Write-Verbose "filtered:$filtered"
     $csvLine = $filtered -join $Separator
     $writer.WriteLine($csvLine)
     $linesWritten++

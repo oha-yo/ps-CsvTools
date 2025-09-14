@@ -1,4 +1,4 @@
-# ストリーミング読み込み
+﻿# ストリーミング読み込み
 function Get-StreamReader {
     # 補足 UTF8の場合readerはBOMの有無に関係なく求める事ができる
     param(

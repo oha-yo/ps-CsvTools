@@ -1,4 +1,4 @@
-function Get-FileBOMAndNewLine {
+﻿function Get-FileBOMAndNewLine {
     param(
         [string]$FilePath
     )

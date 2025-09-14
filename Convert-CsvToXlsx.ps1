@@ -1,4 +1,4 @@
-param(
+﻿param(
     [Parameter(Mandatory = $true)][string]$InputFile,
     [Parameter()][int]$StartRow = 1,
     [Parameter()][int]$MaxRows = 0,
@@ -19,7 +19,7 @@ Get-ChildItem -Path "$PSScriptRoot\Common" -Recurse -Filter *.ps1 | ForEach-Obje
 $Separator = Format-Separator $Separator
 #エンコード名の正規化(曖昧な入力エンコードをPowershellの正規なエンコード名に変換)
 $EncodingName = ConvertTo-EncodingName $EncodingName
-Write-Debug "EncodingName  :$EncodingName"
+Write-Verbose "EncodingName  :$EncodingName"
 
 # EPPlus.dll の読み込み（ImportExcelモジュールから直接）
 $epplusPath = ".\Modules\ImportExcel\7.8.10\EPPlus.dll"
@@ -33,15 +33,15 @@ if (-not (Import-EpplusAssembly -DllPath $epplusPath)) {
 
 # 存在確認をしつつ絶対パスに変換する
 $InputFile = Get-ValidatedFullPath -Path $InputFile -Label "InputFile"
-Write-Debug "InputFile     : $InputFile"
+Write-Verbose "InputFile     : $InputFile"
 
 # 出力ファイル(FULL PATH)作成
 $OutputFile = [System.IO.Path]::ChangeExtension($InputFile, "xlsx")
-Write-Debug "OutputFile    : $OutputFile"
+Write-Verbose "OutputFile    : $OutputFile"
 
 # Stream Reader用エンコード取得
 $Encoding = ConvertTo-Encoding -EncodingName $EncodingName
-Write-Debug "Encoding      :$Encoding"
+Write-Verbose "Encoding      :$Encoding"
 
 # Stream Readerの取得
 $reader = Get-StreamReader -FilePath $InputFile -Encoding $Encoding
@@ -96,11 +96,11 @@ $maxToRead = if ($MaxRows -gt 0) { $MaxRows - 1 } else { [int]::MaxValue }
 while (-not $reader.EndOfStream -and $linesToProcess.Count -lt $maxToRead + 1) {
     $linesToProcess.Add($reader.ReadLine())
     if ($linesToProcess.Count % 50000 -eq 0) {
-        Write-Debug "読み込み中: $($linesToProcess.Count) 行..."
+        Write-Verbose "読み込み中: $($linesToProcess.Count) 行..."
     }
 }
 $reader.Close()
-Write-Debug "InputFile読み込み完了: $($linesToProcess.Count) 行"
+Write-Verbose "InputFile読み込み完了: $($linesToProcess.Count) 行"
 
 # Excelファイル作成
 $package = New-Object OfficeOpenXml.ExcelPackage
@@ -124,13 +124,13 @@ foreach ($line in $linesToProcess) {
         $sheet.Cells.Item($rowIndex, $i + 1).Value = $value
     }
     $rowIndex++
-    if ($rowIndex % 50000 -eq 0) {
-        Write-Debug "書き出し中: $rowIndex 行目..."
+    if ($rowIndex % 1000 -eq 0) {
+        Write-Verbose "書き出し中: $rowIndex 行目..."
     }
 }
 
 # オートフィット・保存
-Write-Debug "ファイル保存中..."
+Write-Verbose "ファイル保存中..."
 $sheet.Cells.AutoFitColumns()
 try {
     $package.SaveAs([System.IO.FileInfo]::new($OutputFile))

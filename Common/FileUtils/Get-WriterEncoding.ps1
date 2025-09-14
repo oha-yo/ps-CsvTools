@@ -1,4 +1,4 @@
-function Get-WriterEncoding {
+﻿function Get-WriterEncoding {
     param(
         [string]$EncodingName,
         [bool]$HasBOM

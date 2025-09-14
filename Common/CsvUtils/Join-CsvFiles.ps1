@@ -1,4 +1,4 @@
-function Join-CsvFiles {
+﻿function Join-CsvFiles {
     param (
         [string]$Csv1Path,
         [string]$Csv2Path,
@@ -15,8 +15,8 @@ function Join-CsvFiles {
     $hasBOM       = $encodingInfo.HasBOM
     $newLineChar  = $encodingInfo.newLineChar
     $displayName  = $encodingInfo.DisplayName
-    Write-Debug "hasBOM        :$hasBOM"
-    Write-Debug "newLineChar   :$displayName"
+    Write-Verbose "hasBOM        :$hasBOM"
+    Write-Verbose "newLineChar   :$displayName"
 
     $writer  = Get-StreamWriter $OutCsvPath $Encoding $newLineChar
 
